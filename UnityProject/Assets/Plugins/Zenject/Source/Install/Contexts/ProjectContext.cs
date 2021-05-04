@@ -170,6 +170,19 @@ namespace Zenject
             }
         }
 
+#if UNITY_EDITOR
+        // Required for disabling domain reload in enter the play mode feature. See: https://docs.unity3d.com/Manual/DomainReloading.html
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStaticValues()
+        {
+            PreInstall = null;
+            PostInstall = null;
+            PreResolve = null;
+            PostResolve = null;
+            _instance = null;
+        }
+#endif
+
         public bool ParentNewObjectsUnderContext
         {
             get { return _parentNewObjectsUnderContext; }

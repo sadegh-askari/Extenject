@@ -16,14 +16,24 @@ namespace Zenject.Internal
         static ReflectionTypeAnalyzer()
         {
             _injectAttributeTypes = new HashSet<Type>();
-            _injectAttributeTypes.Add(typeof(InjectAttributeBase));
-
-            ConstructorChoiceStrategy = ConstructorChoiceStrategy.InjectAttributeThenLeastArguments;
+            ResetStaticValues();
         }
 
         public static ConstructorChoiceStrategy ConstructorChoiceStrategy 
         {
             get; set;
+        }
+
+        // Only keep the attribute in define to avoid code duplication in static constructor and ResetStaticValues method
+#if UNITY_EDITOR
+        // Required for disabling domain reload in enter the play mode feature. See: https://docs.unity3d.com/Manual/DomainReloading.html
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+#endif
+        static void ResetStaticValues()
+        {
+            _injectAttributeTypes.Clear();
+            _injectAttributeTypes.Add(typeof(InjectAttributeBase));
+            ConstructorChoiceStrategy = ConstructorChoiceStrategy.InjectAttributeThenLeastArguments;
         }
 
         public static void AddCustomInjectAttribute<T>()
