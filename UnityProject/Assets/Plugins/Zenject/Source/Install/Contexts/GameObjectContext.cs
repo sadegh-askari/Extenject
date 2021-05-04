@@ -43,27 +43,26 @@ namespace Zenject
         [Inject]
         public void Construct(DiContainer parentContainer)
         {
-#if UNITY_EDITOR
-            // We don't reset instance fields in Awake because Construct method gets called before Awake
-            
-            // When Scene Reloading is disabled in Enter The Play Mode settings, we need to reset all non-serialized fields
-            // https://docs.unity3d.com/Manual/SceneReloading.html
-            if ((UnityEditor.EditorSettings.enterPlayModeOptions & UnityEditor.EnterPlayModeOptions.DisableSceneReload) != 0)
-            {
-                PreInstall = null;
-                PostInstall = null;
-                PreResolve = null;
-                PostResolve = null;
-                _hasInstalled = false;
-                _parentContainer = null;
-            }
-#endif
-
             Assert.IsNull(_parentContainer);
             _parentContainer = parentContainer;
 
             Initialize();
         }
+
+#if UNITY_EDITOR
+        protected override void ResetInstanceFields()
+        {
+            base.ResetInstanceFields();
+            
+            PreInstall = null;
+            PostInstall = null;
+            PreResolve = null;
+            PostResolve = null;
+            _hasInstalled = false;
+            _parentContainer = null;
+            _container = null;
+        }
+#endif
 
         protected override void RunInternal()
         {

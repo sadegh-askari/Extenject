@@ -10,6 +10,10 @@ using UnityEngine.Serialization;
 using Zenject.Internal;
 using UnityEngine.Events;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 namespace Zenject
 {
     public class SceneContext : RunnableContext
@@ -108,7 +112,7 @@ namespace Zenject
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         static void ResetStaticValues()
         {
-            if (!UnityEditor.EditorSettings.enterPlayModeOptionsEnabled)
+            if (!EditorSettings.enterPlayModeOptionsEnabled)
             {
                 return;
             }
@@ -121,22 +125,7 @@ namespace Zenject
         protected override void Awake()
         {
             base.Awake();
-#if UNITY_EDITOR
-            // When Scene Reloading is disabled in Enter The Play Mode settings, we need to reset all non-serialized fields
-            // https://docs.unity3d.com/Manual/SceneReloading.html
-            if ((UnityEditor.EditorSettings.enterPlayModeOptions & UnityEditor.EnterPlayModeOptions.DisableSceneReload) != 0)
-            {
-                _container = null;
-                _decoratorContexts.Clear();
-                _hasInstalled = false;
-                _hasResolved = false;
-                PreInstall = null;
-                PostInstall = null;
-                PreResolve = null;
-                PostResolve = null;
-            }
-#endif
-            
+
 #if ZEN_INTERNAL_PROFILING
             ProfileTimers.ResetAll();
             using (ProfileTimers.CreateTimedBlock("Other"))
@@ -145,6 +134,22 @@ namespace Zenject
                 Initialize();
             }
         }
+
+#if UNITY_EDITOR
+        protected override void ResetInstanceFields()
+        {
+            base.ResetInstanceFields();
+            
+            _container = null;
+            _decoratorContexts.Clear();
+            _hasInstalled = false;
+            _hasResolved = false;
+            PreInstall = null;
+            PostInstall = null;
+            PreResolve = null;
+            PostResolve = null;
+        }
+#endif
 
         public void Validate()
         {
