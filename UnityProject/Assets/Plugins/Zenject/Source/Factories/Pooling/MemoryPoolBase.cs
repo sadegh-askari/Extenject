@@ -1,6 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using ModestTree;
+#if !NOT_UNITY3D
+using UnityEngine;
+
+#endif
 
 namespace Zenject
 {
@@ -117,9 +121,9 @@ namespace Zenject
 
         public void Despawn(TContract item)
         {
-            Assert.IsNotNull(item, "Tried to return a null item to pool {0}", GetType());
-            
-            Assert.That(!_inactiveItems.Contains(item), 
+            Assert.That(!IsItemNull(item), "Tried to return a null item to pool {0}", GetType());
+
+            Assert.That(!_inactiveItems.Contains(item),
                 "Tried to return an item to pool {0} twice", GetType());
 
             _activeCount--;
@@ -197,15 +201,17 @@ namespace Zenject
             TContract item = default;
 
             // This check prevents NRE when gameobject in the pool is destroyed externally (sometimes by user sometimes by unity when changing scene).
-            while (item == null && _inactiveItems.Count > 0)
+            while (IsItemNull(item) && _inactiveItems.Count > 0)
                 item = _inactiveItems.Pop();
-            
-            if (item == null && _inactiveItems.Count == 0)
+
+            if (IsItemNull(item) && _inactiveItems.Count == 0)
             {
                 ExpandPool();
                 Assert.That(!_inactiveItems.IsEmpty());
                 item = _inactiveItems.Pop();
             }
+            
+            Assert.That(!IsItemNull(item), "Item in the pool is null");
 
             _activeCount++;
             OnSpawned(item);
@@ -293,6 +299,19 @@ namespace Zenject
         protected virtual void OnDestroyed(TContract item)
         {
             // Optional
+        }
+
+        private static bool IsItemNull(TContract item)
+        {
+            if (item == null)
+                return true;
+
+#if !NOT_UNITY3D
+            if (item is Component c)
+                return c.gameObject == null;
+#endif
+
+            return false;
         }
     }
 }
