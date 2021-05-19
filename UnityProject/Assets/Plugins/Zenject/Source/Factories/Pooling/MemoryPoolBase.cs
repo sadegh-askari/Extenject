@@ -119,6 +119,7 @@ namespace Zenject
         {
             Assert.IsNotNull(item, "Tried to return a null item to pool {0}", GetType());
             
+            Assert.That(!_inactiveItems.Contains(item), 
                 "Tried to return an item to pool {0} twice", GetType());
 
             _activeCount--;
