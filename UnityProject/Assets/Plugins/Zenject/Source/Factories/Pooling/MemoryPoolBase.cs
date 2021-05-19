@@ -308,7 +308,10 @@ namespace Zenject
 
 #if !NOT_UNITY3D
             if (item is Component c)
-                return c.gameObject == null;
+            {
+                // Seems kinda weird, but somehow even though we checked for null-ness of `item`, we also need to check for null-ness of `c` before accessing c.gameObject
+                return c == null || c.gameObject == null;
+            }
 #endif
 
             return false;
