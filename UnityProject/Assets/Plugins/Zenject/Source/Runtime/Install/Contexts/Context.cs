@@ -26,7 +26,7 @@ namespace Zenject
         [SerializeField, Tooltip("If checked, this context will automatically get all MonoInstallers attached to the current game object using GetComponents.")]
         bool _autoGetMonoInstallers;
 
-        List<InstallerBase> _normalInstallers = new List<InstallerBase>();
+        List<IInstaller> _normalInstallers = new List<IInstaller>();
         List<Type> _normalInstallerTypes = new List<Type>();
 
         public IEnumerable<MonoInstaller> Installers
@@ -73,7 +73,7 @@ namespace Zenject
         }
 
         // Unlike other installer types this has to be set through code
-        public IEnumerable<InstallerBase> NormalInstallers
+        public IEnumerable<IInstaller> NormalInstallers
         {
             get { return _normalInstallers; }
             set
@@ -167,14 +167,22 @@ namespace Zenject
         {
             if (_autoGetMonoInstallers)
             {
-                var pool = ListPool<MonoInstaller>.Instance;
+                var pool = ListPool<IInstaller>.Instance;
                 var attached = pool.Spawn();
                 GetComponents(attached);
 
-                foreach (MonoInstaller m in attached)
+                foreach (IInstaller installer in attached)
                 {
-                    if (!_monoInstallers.Contains(m))
-                        _monoInstallers.Add(m);
+                    if (installer is MonoInstaller m)
+                    {
+                        if (!_monoInstallers.Contains(m))
+                            _monoInstallers.Add(m);
+                    }
+                    else
+                    {
+                        if (!_normalInstallers.Contains(installer))
+                            _normalInstallers.Add(installer);
+                    }
                 }
 
                 attached.Clear();
@@ -187,7 +195,7 @@ namespace Zenject
         }
 
         protected void InstallInstallers(
-            List<InstallerBase> normalInstallers,
+            List<IInstaller> normalInstallers,
             List<Type> normalInstallerTypes,
             List<ScriptableObjectInstaller> scriptableObjectInstallers,
             List<MonoInstaller> installers,
