@@ -22,6 +22,9 @@ namespace Zenject
         List<MonoInstaller> _monoInstallers = new List<MonoInstaller>();
 
         [SerializeField] List<MonoInstaller> _installerPrefabs = new List<MonoInstaller>();
+        
+        [SerializeField, Tooltip("If checked, this context will automatically get all MonoInstallers attached to the current game object using GetComponents.")]
+        bool _autoGetMonoInstallers;
 
         List<InstallerBase> _normalInstallers = new List<InstallerBase>();
         List<Type> _normalInstallerTypes = new List<Type>();
@@ -162,6 +165,22 @@ namespace Zenject
 
         protected void InstallInstallers()
         {
+            if (_autoGetMonoInstallers)
+            {
+                var pool = ListPool<MonoInstaller>.Instance;
+                var attached = pool.Spawn();
+                GetComponents(attached);
+
+                foreach (MonoInstaller m in attached)
+                {
+                    if (!_monoInstallers.Contains(m))
+                        _monoInstallers.Add(m);
+                }
+
+                attached.Clear();
+                pool.Despawn(attached);
+            }
+            
             InstallInstallers(
                 _normalInstallers, _normalInstallerTypes, _scriptableObjectInstallers, _monoInstallers,
                 _installerPrefabs);
