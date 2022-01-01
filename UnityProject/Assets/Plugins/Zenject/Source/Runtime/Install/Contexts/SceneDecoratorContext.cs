@@ -124,7 +124,7 @@ namespace Zenject
 
         public void InstallLateDecoratorInstallers()
         {
-            InstallInstallers(new List<InstallerBase>(), new List<Type>(), _lateScriptableObjectInstallers, _lateInstallers, _lateInstallerPrefabs);
+            InstallInstallers(new List<IInstaller>(), new List<Type>(), _lateScriptableObjectInstallers, _lateInstallers, _lateInstallerPrefabs);
         }
     }
 }
