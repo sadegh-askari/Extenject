@@ -48,6 +48,12 @@ namespace Zenject
         bool _displayWarningWhenResolvingDuringInstall;
 
 #if !NOT_UNITY3D
+        [SerializeField] 
+        private bool _useZenjectBinding;
+#endif
+        
+
+#if !NOT_UNITY3D
         [SerializeField]
 #endif
         RootResolveMethods _validationRootResolveMethod;
@@ -131,6 +137,8 @@ namespace Zenject
         {
             get { return _ensureDeterministicDestructionOrderOnApplicationQuit; }
         }
+
+        public bool UseZenjectBinding => _useZenjectBinding;
 
         [Serializable]
         public class SignalSettings
