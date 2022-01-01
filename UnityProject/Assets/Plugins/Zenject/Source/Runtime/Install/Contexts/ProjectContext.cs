@@ -61,6 +61,8 @@ namespace Zenject
             }
         }
 
+        public ZenjectSettings Settings => _settings;
+
         public static bool ValidateOnNextRun
         {
             get;
