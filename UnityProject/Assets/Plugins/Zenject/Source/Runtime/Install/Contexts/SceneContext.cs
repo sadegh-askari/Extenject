@@ -9,6 +9,7 @@ using UnityEngine;
 using UnityEngine.Serialization;
 using Zenject.Internal;
 using UnityEngine.Events;
+using UnityEngine.UIElements;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -288,6 +289,17 @@ namespace Zenject
             foreach (var instance in injectableMonoBehaviours)
             {
                 _container.QueueForInject(instance);
+            }
+
+            List<GameObject> rootObjectsInScene = new List<GameObject>();
+            gameObject.scene.GetRootGameObjects(rootObjectsInScene);
+            for (int i = 0; i < rootObjectsInScene.Count; i++)
+            {
+                UIDocument[] uiDocuments = rootObjectsInScene[i].GetComponentsInChildren<UIDocument>(true);
+                for (int j = 0; j < uiDocuments.Length; j++)
+                {
+                    uiDocuments[j].rootVisualElement.Query().ForEach(x => _container.QueueForInject(x));
+                }
             }
 
             foreach (var decoratorContext in _decoratorContexts)
