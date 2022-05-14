@@ -25,6 +25,8 @@ namespace Zenject
         public static void GetAllInstances(
             this IProvider creator, InjectContext context, List<TypeValuePair> args, List<object> buffer)
         {
+            using var profiler = ZenProfileBlock.StartForMethod(creator.GetType());
+            
             Assert.IsNotNull(context);
 
             Action injectAction;

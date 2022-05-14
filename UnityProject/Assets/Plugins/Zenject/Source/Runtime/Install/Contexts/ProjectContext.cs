@@ -99,9 +99,7 @@ namespace Zenject
 
         static void InstantiateAndInitialize()
         {
-#if UNITY_EDITOR
             ProfileBlock.UnityMainThread = Thread.CurrentThread;
-#endif
 
             Assert.That(FindObjectsOfType<ProjectContext>().IsEmpty(),
                 "Tried to create multiple instances of ProjectContext!");
