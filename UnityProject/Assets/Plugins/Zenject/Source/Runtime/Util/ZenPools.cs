@@ -173,6 +173,16 @@ namespace Zenject.Internal
         {
             _contextPool.Despawn(context);
         }
+
+        public static Queue<T> SpawnQueue<T>(DisposeBlock disposeBlock = null)
+        {
+            return disposeBlock?.Spawn(QueuePool<T>.Instance) ?? QueuePool<T>.Instance.Spawn();
+        }
+
+        public static void DespawnQueue<T>(Queue<T> queue)
+        {
+            QueuePool<T>.Instance.Despawn(queue);
+        }
 #endif
 
         public static InjectContext SpawnInjectContext(

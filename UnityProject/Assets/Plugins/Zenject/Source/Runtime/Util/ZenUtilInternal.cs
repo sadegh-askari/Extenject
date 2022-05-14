@@ -105,7 +105,11 @@ namespace Zenject.Internal
 
         public static void AddStateMachineBehaviourAutoInjectersInScene(Scene scene)
         {
-            foreach (var rootObj in GetRootGameObjects(scene))
+            using var disposeBlock = DisposeBlock.Spawn();
+            List<GameObject> roots = ZenPools.SpawnList<GameObject>(disposeBlock);
+
+            GetRootGameObjects(scene, roots);
+            foreach (GameObject rootObj in roots)
             {
                 if (rootObj != null)
                 {
@@ -125,7 +129,9 @@ namespace Zenject.Internal
             using (ProfileTimers.CreateTimedBlock("Searching Hierarchy"))
 #endif
             {
-                var animators = root.GetComponentsInChildren<Animator>(true);
+                using var disposeBlock = DisposeBlock.Spawn();
+                List<Animator> animators = ZenPools.SpawnList<Animator>(disposeBlock);
+                root.GetComponentsInChildren(true, animators);
 
                 foreach (var animator in animators)
                 {
@@ -144,7 +150,10 @@ namespace Zenject.Internal
             using (ProfileTimers.CreateTimedBlock("Searching Hierarchy"))
 #endif
             {
-                foreach (var rootObj in GetRootGameObjects(scene))
+                using var disposeBlock = DisposeBlock.Spawn();
+                var roots = ZenPools.SpawnList<GameObject>(disposeBlock);
+                GetRootGameObjects(scene, roots);
+                foreach (var rootObj in roots)
                 {
                     if (rootObj != null)
                     {
@@ -175,15 +184,14 @@ namespace Zenject.Internal
                 return;
             }
 
-            var monoBehaviours = gameObject.GetComponents<MonoBehaviour>();
+            using DisposeBlock disposeBlock = DisposeBlock.Spawn();
+            List<MonoBehaviour> monoBehaviours = ZenPools.SpawnList<MonoBehaviour>(disposeBlock);
+            gameObject.GetComponents(monoBehaviours);
 
-            for (int i = 0; i < monoBehaviours.Length; i++)
+            foreach (MonoBehaviour monoBehaviour in monoBehaviours)
             {
-                var monoBehaviour = monoBehaviours[i];
-
                 // Can be null for broken component references
-                if (monoBehaviour != null
-                        && monoBehaviour.GetType().DerivesFromOrEqual<GameObjectContext>())
+                if (monoBehaviour != null && monoBehaviour.GetType().DerivesFromOrEqual<GameObjectContext>())
                 {
                     // Need to make sure we don't inject on any MonoBehaviour's that are below a GameObjectContext
                     // Since that is the responsibility of the GameObjectContext
@@ -205,13 +213,10 @@ namespace Zenject.Internal
                 }
             }
 
-            for (int i = 0; i < monoBehaviours.Length; i++)
+            foreach (MonoBehaviour monoBehaviour in monoBehaviours)
             {
-                var monoBehaviour = monoBehaviours[i];
-
                 // Can be null for broken component references
-                if (monoBehaviour != null
-                    && IsInjectableMonoBehaviourType(monoBehaviour.GetType()))
+                if (monoBehaviour != null && IsInjectableMonoBehaviourType(monoBehaviour.GetType()))
                 {
                     injectableComponents.Add(monoBehaviour);
                 }
@@ -224,7 +229,7 @@ namespace Zenject.Internal
             return type != null && !type.DerivesFrom<MonoInstaller>() && TypeAnalyzer.HasInfo(type);
         }
 
-        public static IEnumerable<GameObject> GetRootGameObjects(Scene scene)
+        public static void GetRootGameObjects(Scene scene, List<GameObject> output)
         {
 #if ZEN_INTERNAL_PROFILING
             using (ProfileTimers.CreateTimedBlock("Searching Hierarchy"))
@@ -232,8 +237,19 @@ namespace Zenject.Internal
             {
                 if (scene.isLoaded)
                 {
-                    return scene.GetRootGameObjects()
-                        .Where(x => x.GetComponent<ProjectContext>() == null);
+                    scene.GetRootGameObjects(output);
+                    for (int i = output.Count - 1; i >= 0; i--)
+                    {
+                        if (output[i].GetComponent<ProjectContext>() != null)
+                        {
+                            output.RemoveAt(i);
+                            
+                            // We assume there's only going to be one ProjectContext
+                            break;
+                        }
+                    }
+
+                    return;
                 }
 
                 // Note: We can't use scene.GetRootObjects() here because that apparently fails with an exception
@@ -249,10 +265,10 @@ namespace Zenject.Internal
                 // be injected multiple times when another scene is loaded
                 //
                 // We also make sure not to inject into the project root objects which are injected by ProjectContext.
-                return Resources.FindObjectsOfTypeAll<GameObject>()
+                output.AddRange(Resources.FindObjectsOfTypeAll<GameObject>()
                     .Where(x => x.transform.parent == null
-                            && x.GetComponent<ProjectContext>() == null
-                            && x.scene == scene);
+                                && x.GetComponent<ProjectContext>() == null
+                                && x.scene == scene));
             }
         }
 

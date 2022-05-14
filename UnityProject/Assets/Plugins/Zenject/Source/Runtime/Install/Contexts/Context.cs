@@ -6,6 +6,8 @@ using System.Linq;
 using ModestTree;
 using UnityEngine;
 using UnityEngine.Serialization;
+using Zenject.Internal;
+
 #if UNITY_EDITOR
 using UnityEditor;
 
@@ -81,7 +83,7 @@ namespace Zenject
         }
 
         public abstract DiContainer Container { get; }
-        public abstract IEnumerable<GameObject> GetRootGameObjects();
+        public abstract void GetRootGameObjects(List<GameObject> output);
 
         protected virtual void Awake()
         {
@@ -91,7 +93,12 @@ namespace Zenject
             EditorApplication.playModeStateChanged += OnEditorPlayModeChanged;
 #endif
         }
-        
+
+        protected virtual void OnDestroy()
+        {
+            Container.Dispose();
+        }
+
 #if UNITY_EDITOR
         void OnEditorPlayModeChanged(PlayModeStateChange obj)
         {
@@ -194,9 +201,12 @@ namespace Zenject
             // ScriptableObjectInstallers are often used for settings (including settings
             // that are injected into other installers like MonoInstallers)
 
-            var allInstallers = normalInstallers.Cast<IInstaller>()
-                .Concat(scriptableObjectInstallers.Cast<IInstaller>())
-                .Concat(installers.Cast<IInstaller>()).ToList();
+            using var disposeBlock = DisposeBlock.Spawn();
+            List<IInstaller> allInstallers = ZenPools.SpawnList<IInstaller>(disposeBlock);
+
+            allInstallers.AddRange(normalInstallers);
+            allInstallers.AddRange(scriptableObjectInstallers);
+            allInstallers.AddRange(installers);
 
             foreach (var installerPrefab in installerPrefabs)
             {

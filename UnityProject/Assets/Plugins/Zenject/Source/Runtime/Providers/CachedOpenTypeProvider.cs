@@ -69,18 +69,12 @@ namespace Zenject
 
         List<object> TryGetMatchFromCache(Type memberType)
         {
-            List<object> result = null;
-
-            for (int i = 0; i < _cachedInstances.Count; i++) 
+            foreach (List<object> instanceList in _cachedInstances)
             {
-                var instanceList = _cachedInstances[i];
-
                 bool matchesAll = true;
 
-                for (int k = 0; k < instanceList.Count; k++) 
+                foreach (object instance in instanceList)
                 {
-                    var instance = instanceList[k];
-
                     if (instance == null) 
                     {
                         if (memberType.IsValueType()) 
@@ -99,14 +93,13 @@ namespace Zenject
                     }
                 }
 
-                if (matchesAll) 
+                if (matchesAll)
                 {
-                    Assert.IsNull(result); // Is there any case where this is hit?
-                    result = instanceList;
+                    return instanceList;
                 }
             }
 
-            return result;
+            return null;
         }
 
         public void GetAllInstancesWithInjectSplit(

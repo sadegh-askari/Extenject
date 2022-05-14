@@ -35,9 +35,9 @@ namespace Zenject
             get { return _container; }
         }
 
-        public override IEnumerable<GameObject> GetRootGameObjects()
+        public override void GetRootGameObjects(List<GameObject> output)
         {
-            return new[] { gameObject };
+            output.Add(gameObject);
         }
 
         [Inject]
@@ -159,8 +159,12 @@ namespace Zenject
         {
             ZenUtilInternal.AddStateMachineBehaviourAutoInjectersUnderGameObject(gameObject);
 
+            using var disposeBlock = DisposeBlock.Spawn();
+            List<MonoBehaviour> allMonoBehaviours = ZenPools.SpawnList<MonoBehaviour>(disposeBlock);
+            GetComponents(allMonoBehaviours);
+
             // We inject on all components on the root except ourself
-            foreach (var monoBehaviour in GetComponents<MonoBehaviour>())
+            foreach (MonoBehaviour monoBehaviour in allMonoBehaviours)
             {
                 if (monoBehaviour == null)
                 {

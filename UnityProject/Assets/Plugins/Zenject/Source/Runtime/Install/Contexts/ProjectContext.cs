@@ -67,9 +67,9 @@ namespace Zenject
             set;
         }
 
-        public override IEnumerable<GameObject> GetRootGameObjects()
+        public override void GetRootGameObjects(List<GameObject> output)
         {
-            return new[] { gameObject };
+            output.Add(gameObject);
         }
 
         public static GameObject TryGetPrefab()
@@ -244,7 +244,8 @@ namespace Zenject
                 PreInstall();
             }
 
-            var injectableMonoBehaviours = new List<MonoBehaviour>();
+            using var disposeBlock = DisposeBlock.Spawn();
+            var injectableMonoBehaviours = disposeBlock.SpawnList<MonoBehaviour>();
             GetInjectableMonoBehaviours(injectableMonoBehaviours);
 
             foreach (var instance in injectableMonoBehaviours)

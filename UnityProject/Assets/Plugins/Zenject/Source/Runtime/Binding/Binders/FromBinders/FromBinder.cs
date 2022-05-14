@@ -521,7 +521,7 @@ namespace Zenject
 
             SubFinalizer = new ScopableBindingFinalizer(
                 BindInfo,
-                (container, concreteType) => new MethodMultipleProviderUntyped(ctx =>
+                (container, concreteType) => new MethodMultipleProviderUntyped((ctx, output) =>
                     {
                         Assert.That(ctx.ObjectType.DerivesFromOrEqual<MonoBehaviour>(),
                             "Cannot use FromComponentInChildren to inject data into non monobehaviours!");
@@ -536,10 +536,10 @@ namespace Zenject
                         {
                             Assert.That(ctx.Optional,
                                 "Could not find any component with type '{0}' through FromComponentInChildren binding", concreteType);
-                            return Enumerable.Empty<object>();
+                            return;
                         }
 
-                        return new object[] { match };
+                        output.Add(match);
                     },
                     container));
 
@@ -558,7 +558,7 @@ namespace Zenject
 
             SubFinalizer = new ScopableBindingFinalizer(
                 BindInfo,
-                (container, concreteType) => new MethodMultipleProviderUntyped(ctx =>
+                (container, concreteType) => new MethodMultipleProviderUntyped((ctx, output) =>
                     {
                         Assert.That(ctx.ObjectType.DerivesFromOrEqual<MonoBehaviour>(),
                             "Cannot use FromComponentsInChildren to inject data into non monobehaviours!");
@@ -580,7 +580,7 @@ namespace Zenject
                             res = res.Where(predicate);
                         }
 
-                        return res.Cast<object>();
+                        output.AddRange(res);
                     },
                     container));
 
@@ -599,7 +599,7 @@ namespace Zenject
 
             SubFinalizer = new ScopableBindingFinalizer(
                 BindInfo,
-                (container, concreteType) => new MethodMultipleProviderUntyped(ctx =>
+                (container, concreteType) => new MethodMultipleProviderUntyped((ctx, output) =>
                     {
                         Assert.That(ctx.ObjectType.DerivesFromOrEqual<MonoBehaviour>(),
                             "Cannot use FromComponentSibling to inject data into non monobehaviours!");
@@ -623,10 +623,10 @@ namespace Zenject
                             Assert.That(ctx.Optional,
                                 "Could not find any component with type '{0}' through FromComponentInParents binding", concreteType);
 
-                            return Enumerable.Empty<object>();
+                            return;
                         }
 
-                        return new object[] { match };
+                        output.Add(match);
                     },
                     container));
 
@@ -645,7 +645,7 @@ namespace Zenject
 
             SubFinalizer = new ScopableBindingFinalizer(
                 BindInfo,
-                (container, concreteType) => new MethodMultipleProviderUntyped(ctx =>
+                (container, concreteType) => new MethodMultipleProviderUntyped((ctx, output) =>
                     {
                         Assert.That(ctx.ObjectType.DerivesFromOrEqual<MonoBehaviour>(),
                             "Cannot use FromComponentSibling to inject data into non monobehaviours!");
@@ -662,7 +662,7 @@ namespace Zenject
                             res = res.Where(x => x.gameObject != monoBehaviour.gameObject);
                         }
 
-                        return res.Cast<object>();
+                        output.AddRange(res);
                     },
                     container));
 
@@ -680,7 +680,7 @@ namespace Zenject
 
             SubFinalizer = new ScopableBindingFinalizer(
                 BindInfo,
-                (container, concreteType) => new MethodMultipleProviderUntyped(ctx =>
+                (container, concreteType) => new MethodMultipleProviderUntyped((ctx, output) =>
                     {
                         Assert.That(ctx.ObjectType.DerivesFromOrEqual<MonoBehaviour>(),
                             "Cannot use FromComponentSibling to inject data into non monobehaviours!");
@@ -695,10 +695,10 @@ namespace Zenject
                         {
                             Assert.That(ctx.Optional,
                                 "Could not find any component with type '{0}' through FromComponentSibling binding", concreteType);
-                            return Enumerable.Empty<object>();
+                            return;
                         }
 
-                        return new object[] { match };
+                        output.Add(match);
                     },
                     container));
 
@@ -716,17 +716,17 @@ namespace Zenject
 
             SubFinalizer = new ScopableBindingFinalizer(
                 BindInfo,
-                (container, concreteType) => new MethodMultipleProviderUntyped(ctx =>
+                (container, concreteType) => new MethodMultipleProviderUntyped((ctx, output) =>
                     {
                         Assert.That(ctx.ObjectType.DerivesFromOrEqual<MonoBehaviour>(),
                             "Cannot use FromComponentSibling to inject data into non monobehaviours!");
 
                         Assert.IsNotNull(ctx.ObjectInstance);
 
-                        var monoBehaviour = (MonoBehaviour)ctx.ObjectInstance;
+                        var monoBehaviour = (MonoBehaviour) ctx.ObjectInstance;
 
-                        return monoBehaviour.GetComponents(concreteType)
-                            .Where(x => !ReferenceEquals(x, monoBehaviour)).Cast<object>();
+                        output.AddRange(monoBehaviour.GetComponents(concreteType)
+                            .Where(x => !ReferenceEquals(x, monoBehaviour)));
                     },
                     container));
 
@@ -747,20 +747,24 @@ namespace Zenject
 
             SubFinalizer = new ScopableBindingFinalizer(
                 BindInfo,
-                (container, concreteType) => new MethodMultipleProviderUntyped(ctx =>
+                (container, concreteType) => new MethodMultipleProviderUntyped((ctx, output) =>
                     {
-                        var match = container.Resolve<Context>().GetRootGameObjects()
+                        using var disposeBlock = DisposeBlock.Spawn();
+                        List<GameObject> roots = ZenPools.SpawnList<GameObject>(disposeBlock);
+
+                        container.Resolve<Context>().GetRootGameObjects(roots);
+                        Component match = roots
                             .Select(x => x.GetComponentInChildren(concreteType, includeInactive))
-                            .Where(x => x != null && !ReferenceEquals(x, ctx.ObjectInstance)).FirstOrDefault();
+                            .FirstOrDefault(x => x != null && !ReferenceEquals(x, ctx.ObjectInstance));
 
                         if (match == null)
                         {
                             Assert.That(ctx.Optional,
                                 "Could not find any component with type '{0}' through FromComponentInHierarchy binding", concreteType);
-                            return Enumerable.Empty<object>();
+                            return;
                         }
 
-                        return new object[] { match };
+                        output.Add(match);
                     },
                     container));
 
@@ -779,9 +783,12 @@ namespace Zenject
 
             SubFinalizer = new ScopableBindingFinalizer(
                 BindInfo,
-                (container, concreteType) => new MethodMultipleProviderUntyped(ctx =>
+                (container, concreteType) => new MethodMultipleProviderUntyped((ctx, output) =>
                     {
-                        var res = container.Resolve<Context>().GetRootGameObjects()
+                        using var disposeBlock = DisposeBlock.Spawn();
+                        var roots = ZenPools.SpawnList<GameObject>(disposeBlock);
+                        container.Resolve<Context>().GetRootGameObjects(roots);
+                        var res = roots
                             .SelectMany(x => x.GetComponentsInChildren(concreteType, includeInactive))
                             .Where(x => !ReferenceEquals(x, ctx.ObjectInstance));
 
@@ -790,7 +797,7 @@ namespace Zenject
                             res = res.Where(predicate);
                         }
 
-                        return res.Cast<object>();
+                        output.AddRange(res);
                     },
                     container));
 
@@ -811,6 +818,11 @@ namespace Zenject
         }
 
         public ScopeConcreteIdArgConditionCopyNonLazyBinder FromMethodMultipleUntyped(Func<InjectContext, IEnumerable<object>> method)
+        {
+            return FromMethodMultipleUntyped((ctx, output) => output.AddRange(method(ctx)));
+        }
+
+        public ScopeConcreteIdArgConditionCopyNonLazyBinder FromMethodMultipleUntyped(Action<InjectContext, List<object>> method)
         {
             BindInfo.RequireExplicitScope = false;
             // Don't know how it's created so can't assume here that it violates AsSingle
