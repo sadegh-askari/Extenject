@@ -6,8 +6,8 @@ using System.Collections.Generic;
 #if UNITASK_PLUGIN
 using Cysharp.Threading.Tasks;
 using Task = Cysharp.Threading.Tasks.UniTask;
-
 #else
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Task = System.Threading.Tasks.Task;
 #endif
@@ -23,10 +23,8 @@ namespace Zenject
         object Result { get; }
 
         Task Task { get; }
-        
-#if UNITASK_PLUGIN
-        UniTask.Awaiter GetAwaiter();
-#else
+
+#if !UNITASK_PLUGIN
         TaskAwaiter GetAwaiter();
 #endif
     }
@@ -62,6 +60,10 @@ namespace Zenject
 
         T _result;
 
+#if !UNITASK_PLUGIN
+        private Task<T> _loadResultTask;
+#endif
+
         protected AsyncInject(InjectContext context)
         {
             _context = context;
@@ -84,7 +86,11 @@ namespace Zenject
         {
             try
             {
+#if UNITASK_PLUGIN
                 T result = await asyncMethod(_context, _args, token);
+#else
+                T result = await (_loadResultTask = asyncMethod(_context, _args, token));
+#endif
                 HandleCompleted(result);
             }
             catch (OperationCanceledException)
@@ -145,13 +151,9 @@ namespace Zenject
             }
         }
 
-
-#if UNITASK_PLUGIN
-        UniTask.Awaiter IAsyncInject.GetAwaiter() => Task.GetAwaiter();
-        public UniTask<T>.Awaiter GetAwaiter() => throw new Exception("You cannot await AsyncInject with UniTask");
-#else
-        TaskAwaiter IAsyncInject.GetAwaiter() => ((Task) _task).GetAwaiter();
-        public TaskAwaiter<T> GetAwaiter() => _task.GetAwaiter();
+#if !UNITASK_PLUGIN
+        TaskAwaiter IAsyncInject.GetAwaiter() => ((Task) _loadResultTask).GetAwaiter();
+        public TaskAwaiter<T> GetAwaiter() => _loadResultTask.GetAwaiter();
 #endif
     }
 }

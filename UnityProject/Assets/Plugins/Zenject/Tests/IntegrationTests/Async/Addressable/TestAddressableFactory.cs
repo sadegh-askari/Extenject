@@ -7,7 +7,6 @@ using UnityEngine.TestTools;
 
 #if UNITASK_PLUGIN
 using Cysharp.Threading.Tasks;
-
 #else
 using System.Threading.Tasks;
 #endif
@@ -31,6 +30,7 @@ namespace Zenject.Tests.IntegrationTests.Async.Addressable
         }
 
         [UnityTest]
+        [Timeout(10000)]
         public IEnumerator FactoryInstantiatePrefabForComponent()
         {
             yield return ValidateTestDependency();
@@ -49,7 +49,7 @@ namespace Zenject.Tests.IntegrationTests.Async.Addressable
 
             const int parameterToPass = 2;
             bool success = false;
-            _ = factory.CreateAsync(parameterToPass).ContinueWith(result =>
+            ContinueTaskWith(factory.CreateAsync(parameterToPass), result =>
             {
                 Assert.IsNotNull(result);
                 Assert.AreEqual(parameterToPass, result.InjectedValue);
@@ -67,6 +67,7 @@ namespace Zenject.Tests.IntegrationTests.Async.Addressable
         }
 
         [UnityTest]
+        [Timeout(10000)]
         public IEnumerator FactoryInstantiatePrefab()
         {
             yield return ValidateTestDependency();
@@ -83,9 +84,8 @@ namespace Zenject.Tests.IntegrationTests.Async.Addressable
             Assert.IsNotNull(factory);
             Assert.IsTrue(factory.IsAsync);
 
-            var task = factory.CreateAsync();
             bool success = false;
-            _ = task.ContinueWith(result =>
+            ContinueTaskWith(factory.CreateAsync(), result =>
             {
                 Assert.IsNotNull(result);
                 success = true;
@@ -102,6 +102,7 @@ namespace Zenject.Tests.IntegrationTests.Async.Addressable
         }
 
         [UnityTest]
+        [Timeout(10000)]
         public IEnumerator FactoryInstantiatePrefabForComponent_Pooled()
         {
             yield return ValidateTestDependency();
@@ -121,7 +122,7 @@ namespace Zenject.Tests.IntegrationTests.Async.Addressable
 
             const int parameterToPass = 2;
             bool success = false;
-            _ = factory.CreateAsync(parameterToPass).ContinueWith(result =>
+            ContinueTaskWith(factory.CreateAsync(parameterToPass), result =>
             {
                 Assert.IsNotNull(result);
                 Assert.AreEqual(parameterToPass, result.InjectedValue);
@@ -136,6 +137,23 @@ namespace Zenject.Tests.IntegrationTests.Async.Addressable
             }
 
             Assert.Fail();
+        }
+
+#if UNITASK_PLUGIN
+        private static async void ContinueTaskWith<T>(UniTask<T>, Action<T> continuation)
+#else
+        private static async void ContinueTaskWith<T>(Task<T> task, Action<T> continuation)
+#endif
+        {
+            try
+            {
+                T result = await task;
+                continuation(result);
+            }
+            catch (Exception e)
+            {
+                Debug.LogException(e);
+            }
         }
 
         public class SimpleFactory : PlaceholderFactory<GameObject>
