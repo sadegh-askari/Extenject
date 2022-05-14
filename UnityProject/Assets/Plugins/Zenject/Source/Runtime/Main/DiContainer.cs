@@ -18,24 +18,26 @@ namespace Zenject
     // - Look up bound values via Resolve() method
     // - Instantiate new values via InstantiateX() methods
     [NoReflectionBaking]
-    public class DiContainer : IInstantiator
+    public class DiContainer : IInstantiator, IDisposable
     {
-        readonly Dictionary<Type, IDecoratorProvider> _decorators = new Dictionary<Type, IDecoratorProvider>();
-        readonly Dictionary<BindingId, List<ProviderInfo>> _providers = new Dictionary<BindingId, List<ProviderInfo>>();
+        Dictionary<Type, IDecoratorProvider> _decorators;
+        Dictionary<BindingId, List<ProviderInfo>> _providers;
 
-        readonly DiContainer[][] _containerLookups = new DiContainer[4][];
+        List<DiContainer>[] _containerLookups;
 
-        readonly HashSet<LookupId> _resolvesInProgress = new HashSet<LookupId>();
-        readonly HashSet<LookupId> _resolvesTwiceInProgress = new HashSet<LookupId>();
+        HashSet<LookupId> _resolvesInProgress;
+        HashSet<LookupId> _resolvesTwiceInProgress;
 
         readonly LazyInstanceInjector _lazyInjector;
 
-        readonly SingletonMarkRegistry _singletonMarkRegistry = new SingletonMarkRegistry();
-        readonly Queue<BindStatement> _currentBindings = new Queue<BindStatement>();
-        readonly List<BindStatement> _childBindings = new List<BindStatement>();
+        SingletonMarkRegistry _singletonMarkRegistry = new SingletonMarkRegistry();
+        Queue<BindStatement> _currentBindings;
+        List<BindStatement> _childBindings;
 
-        readonly HashSet<Type> _validatedTypes = new HashSet<Type>();
-        readonly List<IValidatable> _validationQueue = new List<IValidatable>();
+        HashSet<Type> _validatedTypes;
+        List<IValidatable> _validationQueue;
+
+        DisposeBlock _containerDisposables;
 
 #if !NOT_UNITY3D
         Transform _contextTransform;
@@ -55,10 +57,21 @@ namespace Zenject
         bool _hasDisplayedInstallWarning;
 #endif
 
-        public DiContainer(
-            IEnumerable<DiContainer> parentContainersEnumerable, bool isValidating)
+        public DiContainer(IEnumerable<DiContainer> parentContainersEnumerable, bool isValidating)
         {
             _isValidating = isValidating;
+
+            _containerDisposables = DisposeBlock.Spawn();
+            _validationQueue = ZenPools.SpawnList<IValidatable>(_containerDisposables);
+            _validatedTypes = ZenPools.SpawnHashSet<Type>();
+            _childBindings = ZenPools.SpawnList<BindStatement>(_containerDisposables);
+            _currentBindings = ZenPools.SpawnQueue<BindStatement>(_containerDisposables);
+            _resolvesTwiceInProgress = ZenPools.SpawnHashSet<LookupId>(_containerDisposables);
+            _resolvesInProgress = ZenPools.SpawnHashSet<LookupId>(_containerDisposables);
+            _providers = ZenPools.SpawnDictionary<BindingId, List<ProviderInfo>>(_containerDisposables);
+            _decorators = ZenPools.SpawnDictionary<Type, IDecoratorProvider>(_containerDisposables);
+            _containerLookups = ZenPools.SpawnArray<List<DiContainer>>(4, _containerDisposables);
+            _containerDisposables.Add(_singletonMarkRegistry);
 
             _lazyInjector = new LazyInstanceInjector(this);
 
@@ -68,22 +81,29 @@ namespace Zenject
 
             _settings = ZenjectSettings.Default;
 
-            var selfLookup = new[] { this };
-            _containerLookups[(int)InjectSources.Local] = selfLookup;
+            var selfLookup = ZenPools.SpawnList<DiContainer>(_containerDisposables);
+            selfLookup.Add(this);
+            _containerLookups[(int) InjectSources.Local] = selfLookup;
 
-            var parentContainers = parentContainersEnumerable.ToArray();
-            _containerLookups[(int)InjectSources.Parent] = parentContainers;
+            var parentContainers = ZenPools.SpawnList<DiContainer>(_containerDisposables);
+            if (parentContainersEnumerable != null)
+                parentContainers.AddRange(parentContainersEnumerable);
+            _containerLookups[(int) InjectSources.Parent] = parentContainers;
 
-            var ancestorContainers = FlattenInheritanceChain().ToArray();
+            List<DiContainer> ancestors = ZenPools.SpawnList<DiContainer>(_containerDisposables);
+            FlattenInheritanceChain(ancestors);
+            _containerLookups[(int) InjectSources.AnyParent] = ancestors;
 
-            _containerLookups[(int)InjectSources.AnyParent] = ancestorContainers;
-            _containerLookups[(int)InjectSources.Any] = selfLookup.Concat(ancestorContainers).ToArray();
+            List<DiContainer> anyContainer = ZenPools.SpawnList<DiContainer>(_containerDisposables);
+            anyContainer.Add(this);
+            anyContainer.AddRange(ancestors);
+            _containerLookups[(int) InjectSources.Any] = anyContainer;
 
             if (!parentContainers.IsEmpty())
             {
-                for (int i = 0; i < parentContainers.Length; i++)
+                foreach (DiContainer parent in parentContainers)
                 {
-                    parentContainers[i].FlushBindings();
+                    parent.FlushBindings();
                 }
 
 #if !NOT_UNITY3D
@@ -92,7 +112,7 @@ namespace Zenject
 
                 // Make sure to avoid duplicates which could happen if a parent container
                 // appears multiple times in the inheritance chain
-                foreach (var ancestorContainer in ancestorContainers.Distinct())
+                foreach (var ancestorContainer in ancestors.Distinct())
                 {
                     foreach (var binding in ancestorContainer._childBindings)
                     {
@@ -117,22 +137,22 @@ namespace Zenject
         }
 
         public DiContainer(bool isValidating)
-            : this(Enumerable.Empty<DiContainer>(), isValidating)
+            : this((IEnumerable<DiContainer>) null, isValidating)
         {
         }
 
         public DiContainer()
-            : this(Enumerable.Empty<DiContainer>(), false)
+            : this((IEnumerable<DiContainer>) null, false)
         {
         }
 
         public DiContainer(DiContainer parentContainer, bool isValidating)
-            : this(new [] { parentContainer }, isValidating)
+            : this(new[] {parentContainer}, isValidating)
         {
         }
 
         public DiContainer(DiContainer parentContainer)
-            : this(new [] { parentContainer }, false)
+            : this(new[] {parentContainer}, false)
         {
         }
 
@@ -140,6 +160,8 @@ namespace Zenject
             : this(parentContainers, false)
         {
         }
+
+        private bool IsDisposed => _containerDisposables == null;
 
         // By default the settings will be inherited from parent containers, but can be
         // set explicitly here as well which is useful in particular in unit tests
@@ -157,13 +179,21 @@ namespace Zenject
 
         internal SingletonMarkRegistry SingletonMarkRegistry
         {
-            get { return _singletonMarkRegistry; }
+            get
+            {
+                Assert.That(!IsDisposed);
+                return _singletonMarkRegistry;
+            }
         }
 
         public IEnumerable<IProvider> AllProviders
         {
-            // Distinct is necessary since the same providers can be used with multiple contracts
-            get { return _providers.Values.SelectMany(x => x).Select(x => x.Provider).Distinct(); }
+            get
+            {
+                Assert.That(!IsDisposed);
+                // Distinct is necessary since the same providers can be used with multiple contracts
+                return _providers.Values.SelectMany(x => x).Select(x => x.Provider).Distinct();
+            }
         }
 
         void InstallDefaultBindings()
@@ -274,14 +304,14 @@ namespace Zenject
         }
 #endif
 
-        public DiContainer[] ParentContainers
+        public IReadOnlyList<DiContainer> ParentContainers
         {
-            get { return _containerLookups[(int)InjectSources.Parent]; }
+            get { return _containerLookups[(int) InjectSources.Parent]; }
         }
 
-        public DiContainer[] AncestorContainers
+        public IReadOnlyList<DiContainer> AncestorContainers
         {
-            get { return _containerLookups[(int)InjectSources.AnyParent]; }
+            get { return _containerLookups[(int) InjectSources.AnyParent]; }
         }
 
         public bool ChecksForCircularDependencies
@@ -319,6 +349,7 @@ namespace Zenject
         {
             get
             {
+                Assert.That(!IsDisposed);
                 FlushBindings();
                 return _providers.Keys;
             }
@@ -326,6 +357,7 @@ namespace Zenject
 
         public void ResolveRoots()
         {
+            Assert.That(!IsDisposed);
             Assert.That(!_hasResolvedRoots);
 
             FlushBindings();
@@ -351,8 +383,11 @@ namespace Zenject
 
         void ResolveDependencyRoots()
         {
-            var rootBindings = new List<BindingId>();
-            var rootProviders = new List<ProviderInfo>();
+            Assert.That(!IsDisposed);
+
+            using var disposeBlock = DisposeBlock.Spawn();
+            List<BindingId> rootBindings = ZenPools.SpawnList<BindingId>(disposeBlock);
+            List<ProviderInfo> rootProviders = ZenPools.SpawnList<ProviderInfo>(disposeBlock);
 
             foreach (var bindingPair in _providers)
             {
@@ -371,42 +406,35 @@ namespace Zenject
 
             Assert.IsEqual(rootProviders.Count, rootBindings.Count);
 
-            var instances = ZenPools.SpawnList<object>();
+            List<object> instances = ZenPools.SpawnList<object>(disposeBlock);
 
-            try
+            for (int i = 0; i < rootProviders.Count; i++)
             {
-                for (int i = 0; i < rootProviders.Count; i++)
+                var bindId = rootBindings[i];
+                var providerInfo = rootProviders[i];
+
+                using (var context = ZenPools.SpawnInjectContext(this, bindId.Type))
                 {
-                    var bindId = rootBindings[i];
-                    var providerInfo = rootProviders[i];
+                    context.Identifier = bindId.Identifier;
+                    context.SourceType = InjectSources.Local;
 
-                    using (var context = ZenPools.SpawnInjectContext(this, bindId.Type))
-                    {
-                        context.Identifier = bindId.Identifier;
-                        context.SourceType = InjectSources.Local;
+                    // Should this be true?  Are there cases where you are ok that NonLazy matches
+                    // zero providers?
+                    // Probably better to be false to catch mistakes
+                    context.Optional = false;
 
-                        // Should this be true?  Are there cases where you are ok that NonLazy matches
-                        // zero providers?
-                        // Probably better to be false to catch mistakes
-                        context.Optional = false;
-
-                        instances.Clear();
+                    instances.Clear();
 
 #if ZEN_INTERNAL_PROFILING
-                        using (ProfileTimers.CreateTimedBlock("DiContainer.Resolve"))
+                    using (ProfileTimers.CreateTimedBlock("DiContainer.Resolve"))
 #endif
-                        {
-                            SafeGetInstances(providerInfo, context, instances);
-                        }
-
-                        // Zero matches might actually be valid in some cases
-                        //Assert.That(matches.Any());
+                    {
+                        SafeGetInstances(providerInfo, context, instances);
                     }
+
+                    // Zero matches might actually be valid in some cases
+                    //Assert.That(matches.Any());
                 }
-            }
-            finally
-            {
-                ZenPools.DespawnList(instances);
             }
         }
 
@@ -455,11 +483,15 @@ namespace Zenject
 
         public DiContainer CreateSubContainer()
         {
+            Assert.That(!IsDisposed);
+
             return CreateSubContainer(_isValidating);
         }
 
         public void QueueForInject(object instance)
         {
+            Assert.That(!IsDisposed);
+
             _lazyInjector.AddInstance(instance);
         }
 
@@ -472,25 +504,40 @@ namespace Zenject
         // Container property
         public T LazyInject<T>(T instance)
         {
+            Assert.That(!IsDisposed);
+
             _lazyInjector.LazyInject(instance);
             return instance;
         }
 
         DiContainer CreateSubContainer(bool isValidating)
         {
-            return new DiContainer(new[] { this }, isValidating);
+            Assert.That(!IsDisposed);
+
+            List<DiContainer> parent = ZenPools.SpawnList<DiContainer>();
+            try
+            {
+                parent.Add(this);
+                return new DiContainer(parent, isValidating);
+            }
+            finally
+            {
+                ZenPools.DespawnList(parent);
+            }
         }
 
         public void RegisterProvider(
             BindingId bindingId, BindingCondition condition, IProvider provider, bool nonLazy)
         {
+            Assert.That(!IsDisposed);
+
             var info = new ProviderInfo(provider, condition, nonLazy, this);
 
             List<ProviderInfo> providerInfos;
 
             if (!_providers.TryGetValue(bindingId, out providerInfos))
             {
-                providerInfos = new List<ProviderInfo>();
+                providerInfos = ZenPools.SpawnList<ProviderInfo>(_containerDisposables);
                 _providers.Add(bindingId, providerInfos);
             }
 
@@ -533,118 +580,111 @@ namespace Zenject
             var bindingId = context.BindingId;
             var sourceType = context.SourceType;
 
-            var containerLookups = _containerLookups[(int)sourceType];
+            var containerLookups = _containerLookups[(int) sourceType];
 
-            for (int i = 0; i < containerLookups.Length; i++)
+            for (int i = 0; i < containerLookups.Count; i++)
             {
                 containerLookups[i].FlushBindings();
             }
 
-            var localProviders = ZenPools.SpawnList<ProviderInfo>();
+            using var disposeBlock = DisposeBlock.Spawn();
+            var localProviders = ZenPools.SpawnList<ProviderInfo>(disposeBlock);
 
-            try
+            ProviderInfo selected = null;
+            int selectedDistance = Int32.MaxValue;
+            bool selectedHasCondition = false;
+            bool ambiguousSelection = false;
+
+            for (int i = 0; i < containerLookups.Count; i++)
             {
-                ProviderInfo selected = null;
-                int selectedDistance = Int32.MaxValue;
-                bool selectedHasCondition = false;
-                bool ambiguousSelection = false;
+                var container = containerLookups[i];
 
-                for (int i = 0; i < containerLookups.Length; i++)
+                int curDistance = GetContainerHeirarchyDistance(container);
+
+                if (curDistance > selectedDistance)
                 {
-                    var container = containerLookups[i];
+                    // If matching provider was already found lower in the hierarchy => don't search for a new one,
+                    // because there can't be a better or equal provider in this container.
+                    continue;
+                }
 
-                    int curDistance = GetContainerHeirarchyDistance(container);
+                localProviders.Clear();
+                container.GetLocalProviders(bindingId, localProviders);
 
-                    if (curDistance > selectedDistance)
+                for (int k = 0; k < localProviders.Count; k++)
+                {
+                    var provider = localProviders[k];
+
+                    bool curHasCondition = provider.Condition != null;
+
+                    if (curHasCondition && !provider.Condition(context))
                     {
-                        // If matching provider was already found lower in the hierarchy => don't search for a new one,
-                        // because there can't be a better or equal provider in this container.
+                        // The condition is not satisfied.
                         continue;
                     }
 
-                    localProviders.Clear();
-                    container.GetLocalProviders(bindingId, localProviders);
+                    // The distance can't decrease becuase we are iterating over the containers with increasing distance.
+                    // The distance can't increase because  we skip the container if the distance is greater than selected.
+                    // So the distances are equal and only the condition can help resolving the amiguity.
+                    Assert.That(selected == null || selectedDistance == curDistance);
 
-                    for (int k = 0; k < localProviders.Count; k++)
+                    if (curHasCondition)
                     {
-                        var provider = localProviders[k];
-
-                        bool curHasCondition = provider.Condition != null;
-
-                        if (curHasCondition && !provider.Condition(context))
+                        if (selectedHasCondition)
                         {
-                            // The condition is not satisfied.
-                            continue;
-                        }
-
-                        // The distance can't decrease becuase we are iterating over the containers with increasing distance.
-                        // The distance can't increase because  we skip the container if the distance is greater than selected.
-                        // So the distances are equal and only the condition can help resolving the amiguity.
-                        Assert.That(selected == null || selectedDistance == curDistance);
-
-                        if (curHasCondition)
-                        {
-                            if (selectedHasCondition)
-                            {
-                                // Both providers have condition and are on equal depth.
-                                ambiguousSelection = true;
-                            }
-                            else
-                            {
-                                // Ambiguity is resolved because a provider with condition was found.
-                                ambiguousSelection = false;
-                            }
+                            // Both providers have condition and are on equal depth.
+                            ambiguousSelection = true;
                         }
                         else
                         {
-                            if (selectedHasCondition)
-                            {
-                                // Selected provider is better because it has condition.
-                                continue;
-                            }
-                            if (selected != null)
-                            {
-                                // Both providers don't have a condition and are on equal depth.
-                                ambiguousSelection = true;
-                            }
+                            // Ambiguity is resolved because a provider with condition was found.
+                            ambiguousSelection = false;
                         }
-
-                        if (ambiguousSelection)
+                    }
+                    else
+                    {
+                        if (selectedHasCondition)
                         {
+                            // Selected provider is better because it has condition.
                             continue;
                         }
 
-                        selectedDistance = curDistance;
-                        selectedHasCondition = curHasCondition;
-                        selected = provider;
+                        if (selected != null)
+                        {
+                            // Both providers don't have a condition and are on equal depth.
+                            ambiguousSelection = true;
+                        }
                     }
-                }
 
-                if (ambiguousSelection)
-                {
-                    throw Assert.CreateException(
-                        "Found multiple matches when only one was expected for type '{0}'{1}. Object graph:\n {2}",
-                        context.MemberType,
-                        (context.ObjectType == null
-                            ? ""
-                            : " while building object with type '{0}'".Fmt(context.ObjectType)),
-                        context.GetObjectGraphString());
-                }
+                    if (ambiguousSelection)
+                    {
+                        continue;
+                    }
 
-                return selected;
+                    selectedDistance = curDistance;
+                    selectedHasCondition = curHasCondition;
+                    selected = provider;
+                }
             }
-            finally
+
+            if (ambiguousSelection)
             {
-                ZenPools.DespawnList(localProviders);
+                throw Assert.CreateException(
+                    "Found multiple matches when only one was expected for type '{0}'{1}. Object graph:\n {2}",
+                    context.MemberType,
+                    (context.ObjectType == null
+                        ? ""
+                        : " while building object with type '{0}'".Fmt(context.ObjectType)),
+                    context.GetObjectGraphString());
             }
+
+            return selected;
         }
 
         // Get the full list of ancestor Di Containers, making sure to avoid
         // duplicates and also order them in a breadth-first way
-        List<DiContainer> FlattenInheritanceChain()
+        void FlattenInheritanceChain(List<DiContainer> processed)
         {
-            var processed = new List<DiContainer>();
-
             var containerQueue = new Queue<DiContainer>();
             containerQueue.Enqueue(this);
 
@@ -661,8 +701,6 @@ namespace Zenject
                     }
                 }
             }
-
-            return processed;
         }
 
         void GetLocalProviders(BindingId bindingId, List<ProviderInfo> buffer)
@@ -688,16 +726,16 @@ namespace Zenject
         void GetProvidersForContract(
             BindingId bindingId, InjectSources sourceType, List<ProviderInfo> buffer)
         {
-            var containerLookups = _containerLookups[(int)sourceType];
+            var containerLookups = _containerLookups[(int) sourceType];
 
-            for (int i = 0; i < containerLookups.Length; i++)
+            foreach (DiContainer sourceContainer in containerLookups)
             {
-                containerLookups[i].FlushBindings();
+                sourceContainer.FlushBindings();
             }
 
-            for (int i = 0; i < containerLookups.Length; i++)
+            foreach (DiContainer sourceContainer in containerLookups)
             {
-                containerLookups[i].GetLocalProviders(bindingId, buffer);
+                sourceContainer.GetLocalProviders(bindingId, buffer);
             }
         }
 
@@ -717,6 +755,8 @@ namespace Zenject
 
         public IList ResolveAll(InjectContext context)
         {
+            Assert.That(!IsDisposed);
+
             var buffer = ZenPools.SpawnList<object>();
 
             try
@@ -1210,7 +1250,7 @@ namespace Zenject
 
             var ancestorContainers = AncestorContainers;
 
-            for (int i = 0; i < ancestorContainers.Length; i++)
+            for (int i = 0; i < ancestorContainers.Count; i++)
             {
                 if (ancestorContainers[i]._decorators.TryGetValue(contractType, out decoratorProvider))
                 {
@@ -1237,7 +1277,7 @@ namespace Zenject
 
             var parentContainers = ParentContainers;
 
-            for (int i = 0; i < parentContainers.Length; i++)
+            for (int i = 0; i < parentContainers.Count; i++)
             {
                 var parent = parentContainers[i];
 
@@ -1427,6 +1467,8 @@ namespace Zenject
             object injectable, Type injectableType,
             List<TypeValuePair> extraArgs, InjectContext context, object concreteIdentifier)
         {
+            Assert.That(!IsDisposed);
+
 #if ZEN_INTERNAL_PROFILING
             using (ProfileTimers.CreateTimedBlock("DiContainer.Inject"))
 #endif
@@ -1681,6 +1723,8 @@ namespace Zenject
             UnityEngine.Object prefab, GameObjectCreationParameters gameObjectBindInfo,
             InjectContext context, out bool shouldMakeActive)
         {
+            Assert.That(!IsDisposed);
+
             Assert.That(prefab != null, "Null prefab found when instantiating game object");
 
             Assert.That(!AssertOnNewGameObjects,
@@ -2633,6 +2677,8 @@ namespace Zenject
         // You shouldn't need to use this
         public void FlushBindings()
         {
+            Assert.That(!IsDisposed);
+
             while (_currentBindings.Count > 0)
             {
                 var binding = _currentBindings.Dequeue();
@@ -2645,6 +2691,7 @@ namespace Zenject
 
                 if (binding.BindingInheritanceMethod != BindingInheritanceMethods.None)
                 {
+                    _containerDisposables.Add(binding);
                     _childBindings.Add(binding);
                 }
                 else
@@ -2671,6 +2718,8 @@ namespace Zenject
         // Don't use this method
         public BindStatement StartBinding(bool flush = true)
         {
+            Assert.That(!IsDisposed);
+
             Assert.That(!_isFinalizingBinding,
                 "Attempted to start a binding during a binding finalizer.  This is not allowed, since binding finalizers should directly use AddProvider instead, to allow for bindings to be inherited properly without duplicates");
 
@@ -2756,6 +2805,8 @@ namespace Zenject
         ConcreteIdBinderNonGeneric BindInternal(
             BindInfo bindInfo, BindStatement bindingFinalizer)
         {
+            Assert.That(!IsDisposed);
+
 #if ZEN_INTERNAL_PROFILING
             using (ProfileTimers.CreateTimedBlock("DiContainer.Bind"))
 #endif
@@ -3276,6 +3327,8 @@ namespace Zenject
 
         public object InstantiateExplicit(Type concreteType, bool autoInject, List<TypeValuePair> extraArgs, InjectContext context, object concreteIdentifier)
         {
+            Assert.That(!IsDisposed);
+
 #if ZEN_INTERNAL_PROFILING
             using (ProfileTimers.CreateTimedBlock("DiContainer.Instantiate"))
 #endif
@@ -3394,6 +3447,7 @@ namespace Zenject
 
             if (shouldMakeActive && !IsValidating)
             {
+            Assert.That(!IsDisposed);
 #if ZEN_INTERNAL_PROFILING
                 using (ProfileTimers.CreateTimedBlock("User Code"))
 #endif
@@ -3574,6 +3628,31 @@ namespace Zenject
             public readonly bool NonLazy;
             public readonly IProvider Provider;
             public readonly BindingCondition Condition;
+        }
+
+        public void Dispose()
+        {
+            _containerDisposables?.Dispose();
+            _containerDisposables = null;
+
+            Assert.IsEmpty(_currentBindings);
+            _currentBindings = null;
+            
+            // ChildBindings are added to _containerDisposables
+            _childBindings = null;
+            
+            _validationQueue = null;
+            _validatedTypes = null;
+            _containerLookups = null;
+            
+            Assert.IsEmpty(_resolvesTwiceInProgress);
+            _resolvesTwiceInProgress = null;
+            
+            Assert.IsEmpty(_resolvesInProgress);
+            _resolvesInProgress = null;
+
+            _providers = null;
+            _decorators = null;
         }
     }
 }

@@ -3,10 +3,10 @@ using System.Collections.Generic;
 
 namespace Zenject.Internal
 {
-    public static class ZenPools
+    internal static class ZenPools
     {
 #if ZEN_INTERNAL_NO_POOLS
-        public static InjectContext SpawnInjectContext(DiContainer container, Type memberType)
+        public static InjectContext SpawnInjectContext(DiContainer container, Type memberType, DisposeBlock disposeBlock = null)
         {
             return new InjectContext(container, memberType);
         }
@@ -15,7 +15,7 @@ namespace Zenject.Internal
         {
         }
 
-        public static List<T> SpawnList<T>()
+        public static List<T> SpawnList<T>(DisposeBlock disposeBlock = null)
         {
             return new List<T>();
         }
@@ -28,17 +28,17 @@ namespace Zenject.Internal
         {
         }
 
-        public static T[] SpawnArray<T>(int length)
+        public static T[] SpawnArray<T>(int length, DisposeBlock disposeBlock = null)
         {
             return new T[length];
         }
 
-        public static HashSet<T> SpawnHashSet<T>()
+        public static HashSet<T> SpawnHashSet<T>(DisposeBlock disposeBlock = null)
         {
             return new HashSet<T>();
         }
 
-        public static Dictionary<TKey, TValue> SpawnDictionary<TKey, TValue>()
+        public static Dictionary<TKey, TValue> SpawnDictionary<TKey, TValue>(DisposeBlock disposeBlock = null)
         {
             return new Dictionary<TKey, TValue>();
         }
@@ -51,7 +51,7 @@ namespace Zenject.Internal
         {
         }
 
-        public static LookupId SpawnLookupId(IProvider provider, BindingId bindingId)
+        public static LookupId SpawnLookupId(IProvider provider, BindingId bindingId, DisposeBlock disposeBlock = null)
         {
             return new LookupId(provider, bindingId);
         }
@@ -60,7 +60,7 @@ namespace Zenject.Internal
         {
         }
 
-        public static BindInfo SpawnBindInfo()
+        public static BindInfo SpawnBindInfo(DisposeBlock disposeBlock = null)
         {
             return new BindInfo();
         }
@@ -69,7 +69,7 @@ namespace Zenject.Internal
         {
         }
 
-        public static BindStatement SpawnStatement()
+        public static BindStatement SpawnStatement(DisposeBlock disposeBlock = null)
         {
             return new BindStatement();
         }
@@ -83,35 +83,33 @@ namespace Zenject.Internal
         static readonly StaticMemoryPool<BindInfo> _bindInfoPool = new StaticMemoryPool<BindInfo>();
         static readonly StaticMemoryPool<BindStatement> _bindStatementPool = new StaticMemoryPool<BindStatement>();
 
-        public static HashSet<T> SpawnHashSet<T>()
+        public static HashSet<T> SpawnHashSet<T>(DisposeBlock disposeBlock = null)
         {
-            return HashSetPool<T>.Instance.Spawn();
+            return disposeBlock?.Spawn(HashSetPool<T>.Instance) ?? HashSetPool<T>.Instance.Spawn();
         }
 
-        public static Dictionary<TKey, TValue> SpawnDictionary<TKey, TValue>()
+        public static Dictionary<TKey, TValue> SpawnDictionary<TKey, TValue>(DisposeBlock disposeBlock = null)
         {
-            return DictionaryPool<TKey, TValue>.Instance.Spawn();
+            return disposeBlock?.Spawn(DictionaryPool<TKey, TValue>.Instance) ?? DictionaryPool<TKey, TValue>.Instance.Spawn();
         }
 
-        public static BindStatement SpawnStatement()
+        public static BindStatement SpawnStatement(DisposeBlock disposeBlock = null)
         {
-            return _bindStatementPool.Spawn();
+            return disposeBlock?.Spawn(_bindStatementPool) ?? _bindStatementPool.Spawn();
         }
 
         public static void DespawnStatement(BindStatement statement)
         {
-            statement.Reset();
             _bindStatementPool.Despawn(statement);
         }
 
-        public static BindInfo SpawnBindInfo()
+        public static BindInfo SpawnBindInfo(DisposeBlock disposeBlock = null)
         {
-            return _bindInfoPool.Spawn();
+            return disposeBlock?.Spawn(_bindInfoPool) ?? _bindInfoPool.Spawn(); 
         }
 
         public static void DespawnBindInfo(BindInfo bindInfo)
         {
-            bindInfo.Reset();
             _bindInfoPool.Despawn(bindInfo);
         }
 
@@ -125,9 +123,9 @@ namespace Zenject.Internal
             HashSetPool<T>.Instance.Despawn(set);
         }
 
-        public static LookupId SpawnLookupId(IProvider provider, BindingId bindingId)
+        public static LookupId SpawnLookupId(IProvider provider, BindingId bindingId, DisposeBlock disposeBlock = null)
         {
-            var lookupId = _lookupIdPool.Spawn();
+            var lookupId = disposeBlock?.Spawn(_lookupIdPool) ?? _lookupIdPool.Spawn();
 
             lookupId.Provider = provider;
             lookupId.BindingId = bindingId;
@@ -137,13 +135,12 @@ namespace Zenject.Internal
 
         public static void DespawnLookupId(LookupId lookupId)
         {
-            lookupId.Reset();
             _lookupIdPool.Despawn(lookupId);
         }
 
-        public static List<T> SpawnList<T>()
+        public static List<T> SpawnList<T>(DisposeBlock disposeBlock = null)
         {
-            return ListPool<T>.Instance.Spawn();
+            return disposeBlock?.Spawn(ListPool<T>.Instance) ?? ListPool<T>.Instance.Spawn();
         }
 
         public static void DespawnList<T>(List<T> list)
@@ -156,14 +153,15 @@ namespace Zenject.Internal
             ArrayPool<T>.GetPool(arr.Length).Despawn(arr);
         }
 
-        public static T[] SpawnArray<T>(int length)
+        public static T[] SpawnArray<T>(int length, DisposeBlock disposeBlock = null)
         {
-            return ArrayPool<T>.GetPool(length).Spawn();
+            ArrayPool<T> pool = ArrayPool<T>.GetPool(length);
+            return disposeBlock?.Spawn(pool) ?? pool.Spawn();
         }
 
-        public static InjectContext SpawnInjectContext(DiContainer container, Type memberType)
+        public static InjectContext SpawnInjectContext(DiContainer container, Type memberType, DisposeBlock disposeBlock = null)
         {
-            var context = _contextPool.Spawn();
+            var context = disposeBlock?.Spawn(_contextPool) ?? _contextPool.Spawn();
 
             context.Container = container;
             context.MemberType = memberType;
@@ -173,8 +171,17 @@ namespace Zenject.Internal
 
         public static void DespawnInjectContext(InjectContext context)
         {
-            context.Reset();
             _contextPool.Despawn(context);
+        }
+
+        public static Queue<T> SpawnQueue<T>(DisposeBlock disposeBlock = null)
+        {
+            return disposeBlock?.Spawn(QueuePool<T>.Instance) ?? QueuePool<T>.Instance.Spawn();
+        }
+
+        public static void DespawnQueue<T>(Queue<T> queue)
+        {
+            QueuePool<T>.Instance.Despawn(queue);
         }
 #endif
 

@@ -1,6 +1,7 @@
 
 using System.Collections.Generic;
 using ModestTree;
+using Zenject.Internal;
 
 namespace Zenject
 {
@@ -54,7 +55,8 @@ namespace Zenject
             using (ProfileBlock.Start("Zenject.LazyInstanceInjector.LazyInjectAll"))
 #endif
             {
-                var tempList = new List<object>();
+                using var disposeBlock = DisposeBlock.Spawn();
+                List<object> tempList = ZenPools.SpawnList<object>(disposeBlock);
 
                 while (!_instancesToInject.IsEmpty())
                 {

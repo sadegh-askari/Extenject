@@ -71,7 +71,7 @@ namespace Zenject
             }
         }
 
-        public override IEnumerable<GameObject> GetRootGameObjects()
+        public override void GetRootGameObjects(List<GameObject> output)
         {
             // This method should never be called because SceneDecoratorContext's are not bound
             // to the container

@@ -66,6 +66,7 @@ namespace Zenject
 
         public void Dispose()
         {
+            Reset();
             ZenPools.DespawnBindInfo(this);
         }
 

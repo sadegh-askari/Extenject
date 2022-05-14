@@ -4,6 +4,7 @@ using System.Linq;
 #if !NOT_UNITY3D
 using UnityEngine;
 #endif
+using Zenject.Internal;
 using ModestTree;
 
 namespace Zenject
@@ -71,16 +72,32 @@ namespace Zenject
             BindingUtil.AssertIsInterfaceOrComponent(ContractType);
 
             return FromMethod(_ =>
+            {
+                using var disposeBlock = DisposeBlock.Spawn();
+                List<GameObject> roots = ZenPools.SpawnList<GameObject>(disposeBlock);
+                List<TContract> components = ZenPools.SpawnList<TContract>(disposeBlock);
+                
+                BindContainer.Resolve<Context>().GetRootGameObjects(roots);
+
+                foreach (GameObject root in roots)
                 {
-                    var res = BindContainer.Resolve<Context>().GetRootGameObjects()
-                        .Select(x => x.GetComponentInChildren<TContract>(includeInactive))
-                        .Where(x => x != null).FirstOrDefault();
+                    components.Clear();
+                    root.GetComponentsInChildren(includeInactive, components);
 
-                    Assert.IsNotNull(res,
-                        "Could not find component '{0}' through FromComponentInHierarchy factory binding", typeof(TContract));
+                    foreach (TContract c in components)
+                    {
+                        if (c != null)
+                        {
+                            return c;
+                        }
+                    }
+                }
+                
+                Assert.That(false,
+                    "Could not find component '{0}' through FromComponentInHierarchy factory binding", typeof(TContract));
 
-                    return res;
-                });
+                return default;
+            });
         }
 #endif
     }

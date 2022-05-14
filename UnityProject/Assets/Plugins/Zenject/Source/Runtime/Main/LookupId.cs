@@ -1,9 +1,10 @@
+using System;
 using ModestTree;
 
 namespace Zenject.Internal
 {
     [NoReflectionBaking]
-    public class LookupId
+    public class LookupId : IDisposable
     {
         public IProvider Provider;
         public BindingId BindingId;
@@ -34,6 +35,12 @@ namespace Zenject.Internal
             Provider = null;
             BindingId.Type = null;
             BindingId.Identifier = null;
+        }
+
+        public void Dispose()
+        {
+            Reset();
+            ZenPools.DespawnLookupId(this);
         }
     }
 }
