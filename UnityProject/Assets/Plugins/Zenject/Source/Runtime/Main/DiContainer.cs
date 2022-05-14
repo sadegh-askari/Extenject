@@ -500,6 +500,8 @@ namespace Zenject
         void GetProviderMatches(
             InjectContext context, List<ProviderInfo> buffer)
         {
+            using var profiler = ZenProfileBlock.StartForMethod();
+            
             Assert.IsNotNull(context);
             Assert.That(buffer.Count == 0);
 
@@ -688,6 +690,8 @@ namespace Zenject
         void GetProvidersForContract(
             BindingId bindingId, InjectSources sourceType, List<ProviderInfo> buffer)
         {
+            using var profiler = ZenProfileBlock.StartForMethod();
+            
             var containerLookups = _containerLookups[(int)sourceType];
 
             for (int i = 0; i < containerLookups.Length; i++)
@@ -813,6 +817,8 @@ namespace Zenject
 
         void CheckForInstallWarning(InjectContext context)
         {
+            using var profiler = ZenProfileBlock.StartForMethod();
+            
             if (!_settings.DisplayWarningWhenResolvingDuringInstall)
             {
                 return;
@@ -958,9 +964,8 @@ namespace Zenject
 
         public object Resolve(InjectContext context)
         {
-#if ZEN_INTERNAL_PROFILING
             using (ProfileTimers.CreateTimedBlock("DiContainer.Resolve"))
-#endif
+            using (ZenProfileBlock.StartForMethod())
             {
                 // Note: context.Container is not necessarily equal to this, since
                 // you can have some lookups recurse to parent containers
@@ -1088,6 +1093,8 @@ namespace Zenject
 
         void SafeGetInstances(ProviderInfo providerInfo, InjectContext context, List<object> instances)
         {
+            using var profiler = ZenProfileBlock.StartForMethod();
+            
             Assert.IsNotNull(context);
 
             var provider = providerInfo.Provider;
@@ -1201,6 +1208,8 @@ namespace Zenject
 
         IDecoratorProvider TryGetDecoratorProvider(Type contractType)
         {
+            using var profiler = ZenProfileBlock.StartForMethod();
+            
             IDecoratorProvider decoratorProvider;
 
             if (_decorators.TryGetValue(contractType, out decoratorProvider))
@@ -1353,9 +1362,7 @@ namespace Zenject
 #if ZEN_INTERNAL_PROFILING
                             using (ProfileTimers.CreateTimedBlock("User Code"))
 #endif
-#if UNITY_EDITOR
                             using (ProfileBlock.Start("{0}.{1}()", concreteType, concreteType.Name))
-#endif
                             {
                                 newObj = typeInfo.InjectConstructor.Factory(paramValues);
                             }
@@ -1427,9 +1434,8 @@ namespace Zenject
             object injectable, Type injectableType,
             List<TypeValuePair> extraArgs, InjectContext context, object concreteIdentifier)
         {
-#if ZEN_INTERNAL_PROFILING
             using (ProfileTimers.CreateTimedBlock("DiContainer.Inject"))
-#endif
+            using (ZenProfileBlock.Start("DiContainer.Inject"))
             {
                 if (IsValidating)
                 {
@@ -1473,6 +1479,8 @@ namespace Zenject
             InjectTypeInfo typeInfo, List<TypeValuePair> extraArgs,
             InjectContext context, object concreteIdentifier, bool isDryRun)
         {
+            using var profiler = ZenProfileBlock.StartForMethod();
+            
             if (typeInfo.BaseTypeInfo != null)
             {
                 CallInjectMethodsTopDown(
@@ -1539,6 +1547,8 @@ namespace Zenject
             InjectTypeInfo typeInfo, List<TypeValuePair> extraArgs,
             InjectContext context, object concreteIdentifier, bool isDryRun)
         {
+            using var profiler = ZenProfileBlock.StartForMethod();
+            
             if (typeInfo.BaseTypeInfo != null)
             {
                 InjectMembersTopDown(
@@ -2633,6 +2643,8 @@ namespace Zenject
         // You shouldn't need to use this
         public void FlushBindings()
         {
+            using var profiler = ZenProfileBlock.StartForMethod();
+            
             while (_currentBindings.Count > 0)
             {
                 var binding = _currentBindings.Dequeue();
@@ -3276,9 +3288,8 @@ namespace Zenject
 
         public object InstantiateExplicit(Type concreteType, bool autoInject, List<TypeValuePair> extraArgs, InjectContext context, object concreteIdentifier)
         {
-#if ZEN_INTERNAL_PROFILING
             using (ProfileTimers.CreateTimedBlock("DiContainer.Instantiate"))
-#endif
+            using (ZenProfileBlock.StartForMethod(concreteType))
             {
                 if (IsValidating)
                 {
