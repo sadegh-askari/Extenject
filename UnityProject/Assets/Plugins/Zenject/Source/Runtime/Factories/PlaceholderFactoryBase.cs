@@ -82,7 +82,7 @@ namespace Zenject
                 
                 if (result is IAsyncInject asyncInject)
                 {
-                    await asyncInject;
+                    await asyncInject.Task;
                     result = asyncInject.Result;
                 }
 

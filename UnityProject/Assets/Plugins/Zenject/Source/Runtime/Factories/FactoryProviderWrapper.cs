@@ -60,7 +60,7 @@ namespace Zenject
 
             if (instance is IAsyncInject asyncInject)
             {
-                await asyncInject;
+                await asyncInject.Task;
                 instance = asyncInject.Result;
             }
 

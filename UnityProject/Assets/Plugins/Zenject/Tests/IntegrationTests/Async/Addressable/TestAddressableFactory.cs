@@ -140,7 +140,7 @@ namespace Zenject.Tests.IntegrationTests.Async.Addressable
         }
 
 #if UNITASK_PLUGIN
-        private static async void ContinueTaskWith<T>(UniTask<T>, Action<T> continuation)
+        private static async void ContinueTaskWith<T>(UniTask<T> task, Action<T> continuation)
 #else
         private static async void ContinueTaskWith<T>(Task<T> task, Action<T> continuation)
 #endif
