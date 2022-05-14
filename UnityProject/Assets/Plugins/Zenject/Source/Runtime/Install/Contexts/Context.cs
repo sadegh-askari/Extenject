@@ -273,6 +273,9 @@ namespace Zenject
 
         protected void InstallSceneBindings(List<MonoBehaviour> injectableMonoBehaviours)
         {
+            if (!ProjectContext.Instance.Settings.UseZenjectBinding)
+                return;
+
             foreach (var binding in injectableMonoBehaviours.OfType<ZenjectBinding>())
             {
                 if (binding == null)

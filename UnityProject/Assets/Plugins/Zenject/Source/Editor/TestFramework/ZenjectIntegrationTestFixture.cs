@@ -37,6 +37,22 @@ namespace Zenject
             }
         }
 
+        protected bool IsZenjectBindingsEnabled
+        {
+            get
+            {
+                Assert.That(_hasStartedInstall,
+                    "Must call PreInstall() before accessing ZenjectIntegrationTestFixture.IsZenjectBindingsEnabled!");
+                return ProjectContext.Instance.Settings.UseZenjectBinding;
+            }
+        }
+        
+        protected void NeedZenjectBindingEnabled()
+        {
+            if (!IsZenjectBindingsEnabled)
+                NUnit.Framework.Assert.Inconclusive("Enable Zenject Bindings to run this test");
+        }
+
         [SetUp]
         public void Setup()
         {
