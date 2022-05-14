@@ -77,6 +77,15 @@ namespace Zenject.Internal
         public static void DespawnStatement(BindStatement statement)
         {
         }
+        
+        public static Queue<T> SpawnQueue<T>(DisposeBlock disposeBlock = null)
+        {
+            return new Queue<T>();
+        }
+
+        public static void DespawnQueue<T>(Queue<T> queue)
+        {
+        }
 #else
         static readonly StaticMemoryPool<InjectContext> _contextPool = new StaticMemoryPool<InjectContext>();
         static readonly StaticMemoryPool<LookupId> _lookupIdPool = new StaticMemoryPool<LookupId>();
