@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 namespace Zenject
 {
-    public class ArrayPool<T> : StaticMemoryPoolBaseBase<T[]>
+    public class ArrayPool<T> : StaticMemoryPoolBaseBase<T[]>, IMemoryPool<T[]>
     {
         readonly int _length;
 
