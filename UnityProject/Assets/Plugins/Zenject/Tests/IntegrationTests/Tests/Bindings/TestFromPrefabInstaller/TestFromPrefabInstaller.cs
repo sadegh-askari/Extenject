@@ -23,6 +23,8 @@ namespace Zenject.Tests.Bindings.FromPrefabInstaller
         {
             PreInstall();
 
+            NeedZenjectBindingEnabled();
+            
             Container.Bind<Qux>().FromSubContainerResolve()
                 .ByNewPrefabInstaller<FooInstaller>(FooPrefab).AsCached();
 
@@ -36,6 +38,8 @@ namespace Zenject.Tests.Bindings.FromPrefabInstaller
         public IEnumerator TestInstallerGetter()
         {
             PreInstall();
+            
+            NeedZenjectBindingEnabled();
 
             Container.Bind<Qux>().FromSubContainerResolve()
                 .ByNewPrefabInstaller<FooInstaller>(_ => FooPrefab).AsCached();
@@ -51,6 +55,8 @@ namespace Zenject.Tests.Bindings.FromPrefabInstaller
         {
             PreInstall();
 
+            NeedZenjectBindingEnabled();
+            
             Container.Bind<Qux>().FromSubContainerResolve()
                 .ByNewPrefabMethod(FooPrefab, InstallFoo).AsCached();
 
@@ -64,6 +70,8 @@ namespace Zenject.Tests.Bindings.FromPrefabInstaller
         public IEnumerator TestMethodGetter()
         {
             PreInstall();
+            
+            NeedZenjectBindingEnabled();
 
             Container.Bind<Qux>().FromSubContainerResolve()
                 .ByNewPrefabMethod((context) => FooPrefab, InstallFoo).AsCached();
@@ -78,6 +86,8 @@ namespace Zenject.Tests.Bindings.FromPrefabInstaller
         public IEnumerator TestResourceInstaller()
         {
             PreInstall();
+            
+            NeedZenjectBindingEnabled();
 
             Container.Bind<Qux>().FromSubContainerResolve()
                 .ByNewPrefabResourceInstaller<FooInstaller>(FooPrefabResourcePath).AsCached();
@@ -93,6 +103,8 @@ namespace Zenject.Tests.Bindings.FromPrefabInstaller
         {
             PreInstall();
 
+            NeedZenjectBindingEnabled();
+            
             Container.Bind<Qux>().FromSubContainerResolve()
                 .ByNewPrefabResourceMethod(FooPrefabResourcePath, InstallFoo).AsCached();
 

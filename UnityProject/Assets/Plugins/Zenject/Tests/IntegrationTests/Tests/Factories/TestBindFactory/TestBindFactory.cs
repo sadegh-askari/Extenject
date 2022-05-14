@@ -354,6 +354,7 @@ namespace Zenject.Tests.Factories
         public IEnumerator TestToSubContainerPrefabSelf()
         {
             PreInstall();
+            NeedZenjectBindingEnabled();
             Container.BindFactory<Foo, Foo.Factory>().FromSubContainerResolve().ByNewContextPrefab(FooSubContainerPrefab);
 
             PostInstall();
@@ -369,6 +370,7 @@ namespace Zenject.Tests.Factories
         public IEnumerator TestToSubContainerPrefabConcrete()
         {
             PreInstall();
+            NeedZenjectBindingEnabled();
             Container.BindFactory<IFoo, IFooFactory>()
                 .To<Foo>().FromSubContainerResolve().ByNewContextPrefab(FooSubContainerPrefab);
 
@@ -384,6 +386,7 @@ namespace Zenject.Tests.Factories
         public IEnumerator TestToSubContainerPrefabResourceSelf()
         {
             PreInstall();
+            NeedZenjectBindingEnabled();
             Container.BindFactory<Foo, Foo.Factory>()
                 .FromSubContainerResolve().ByNewContextPrefabResource("TestBindFactory/FooSubContainer");
 
@@ -400,6 +403,7 @@ namespace Zenject.Tests.Factories
         public IEnumerator TestToSubContainerPrefabResourceConcrete()
         {
             PreInstall();
+            NeedZenjectBindingEnabled();
             Container.BindFactory<IFoo, IFooFactory>()
                 .To<Foo>().FromSubContainerResolve().ByNewContextPrefabResource("TestBindFactory/FooSubContainer");
 
