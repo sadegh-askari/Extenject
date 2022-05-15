@@ -1,11 +1,16 @@
-#if ZEN_INTERNAL_PROFILING
-
 using System;
+
+#if ZEN_INTERNAL_PROFILING
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using ModestTree;
+
+#else
+using System.Runtime.CompilerServices;
+
+#endif
 
 namespace Zenject
 {
@@ -13,6 +18,7 @@ namespace Zenject
     // And does not use unity's profiler
     public static class ProfileTimers
     {
+#if ZEN_INTERNAL_PROFILING
         static Dictionary<string, TimerInfo> _timers = new Dictionary<string, TimerInfo>();
 
 #if UNITY_EDITOR
@@ -166,7 +172,24 @@ namespace Zenject
                 _timer.Stop();
             }
         }
+#else
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static string FormatResults()
+        {
+            return "";
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double GetTimerElapsedMilliseconds(string name)
+        {
+            return 0;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static IDisposable CreateTimedBlock(string name)
+        {
+            return null;
+        }
+#endif
     }
 }
-
-#endif

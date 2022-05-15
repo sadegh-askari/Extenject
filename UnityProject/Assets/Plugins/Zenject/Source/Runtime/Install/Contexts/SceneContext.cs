@@ -32,7 +32,7 @@ namespace Zenject
         public static Action<DiContainer> ExtraBindingsInstallMethod;
         public static Action<DiContainer> ExtraBindingsLateInstallMethod;
 
-        public static IEnumerable<DiContainer> ParentContainers;
+        public static IReadOnlyCollection<DiContainer> ParentContainers;
 
         [FormerlySerializedAs("ParentNewObjectsUnderRoot")]
         [FormerlySerializedAs("_parentNewObjectsUnderRoot")]
@@ -88,17 +88,11 @@ namespace Zenject
             }
         }
 
-        public IEnumerable<string> ParentContractNames
+        public IReadOnlyCollection<string> ParentContractNames
         {
             get
             {
-                var result = new List<string>();
-                result.AddRange(_parentContractNames);
-                return result;
-            }
-            set
-            {
-                _parentContractNames = value.ToList();
+                return _parentContractNames;
             }
         }
 
@@ -180,16 +174,16 @@ namespace Zenject
             }
         }
 
-        public override IEnumerable<GameObject> GetRootGameObjects()
+        public override void GetRootGameObjects(List<GameObject> output)
         {
-            return ZenUtilInternal.GetRootGameObjects(gameObject.scene);
+            ZenUtilInternal.GetRootGameObjects(gameObject.scene, output);
         }
 
-        IEnumerable<DiContainer> GetParentContainers()
+        IReadOnlyCollection<DiContainer> GetParentContainers()
         {
             var parentContractNames = ParentContractNames;
 
-            if (parentContractNames.IsEmpty())
+            if (parentContractNames.Count == 0)
             {
                 if (ParentContainers != null)
                 {
@@ -284,7 +278,8 @@ namespace Zenject
             // so that it doesn't inject on the game object twice
             // InitialComponentsInjecter will also guarantee that any component that is injected into
             // another component has itself been injected
-            var injectableMonoBehaviours = new List<MonoBehaviour>();
+            using var disposeBlock = DisposeBlock.Spawn();
+            var injectableMonoBehaviours = ZenPools.SpawnList<MonoBehaviour>(disposeBlock);
             GetInjectableMonoBehaviours(injectableMonoBehaviours);
             foreach (var instance in injectableMonoBehaviours)
             {
@@ -295,14 +290,16 @@ namespace Zenject
             // in favor of including it in the UI Elements module. Earlier Unity versions already had that
             // module, but it does not include UIDocument.
 #if USE_UI_ELEMENTS_PACKAGE || (USE_UI_ELEMENTS_MODULE && UNITY_2021_1_OR_NEWER)
-            List<GameObject> rootObjectsInScene = new List<GameObject>();
+            List<GameObject> rootObjectsInScene = ZenPools.SpawnList<GameObject>();
+            List<UIDocument> uiDocuments = ZenPools.SpawnList<UIDocument>();
             gameObject.scene.GetRootGameObjects(rootObjectsInScene);
-            for (int i = 0; i < rootObjectsInScene.Count; i++)
+            foreach (GameObject root in rootObjectsInScene)
             {
-                UIDocument[] uiDocuments = rootObjectsInScene[i].GetComponentsInChildren<UIDocument>(true);
-                for (int j = 0; j < uiDocuments.Length; j++)
+                uiDocuments.Clear();
+                root.GetComponentsInChildren(true, uiDocuments);
+                foreach (UIDocument doc in uiDocuments)
                 {
-                    uiDocuments[j].rootVisualElement.Query().ForEach(x => _container.QueueForInject(x));
+                    doc.rootVisualElement.Query().ForEach(x => _container.QueueForInject(x));
                 }
             }
 #endif

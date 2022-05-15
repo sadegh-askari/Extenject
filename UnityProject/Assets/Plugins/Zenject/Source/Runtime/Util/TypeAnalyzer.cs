@@ -34,10 +34,7 @@ namespace Zenject
         public const string ReflectionBakingFieldSetterPrefix = "__zenFieldSetter";
         public const string ReflectionBakingPropertySetterPrefix = "__zenPropertySetter";
 
-        public static ReflectionBakingCoverageModes ReflectionBakingCoverageMode
-        {
-            get; set;
-        }
+        public static ReflectionBakingCoverageModes ReflectionBakingCoverageMode { get; set; }
 
 #if UNITY_EDITOR
         // Required for disabling domain reload in enter the play mode feature. See: https://docs.unity3d.com/Manual/DomainReloading.html
@@ -48,7 +45,7 @@ namespace Zenject
             {
                 return;
             }
-            
+
             _typeInfo.Clear();
             _allowDuringValidation.Clear();
         }
@@ -127,6 +124,8 @@ namespace Zenject
 
         public static InjectTypeInfo TryGetInfo(Type type)
         {
+            using var profiler = ZenProfileBlock.StartForMethod();
+            
             InjectTypeInfo info;
 
 #if ZEN_MULTITHREADING
@@ -184,9 +183,8 @@ namespace Zenject
             }
 #endif
 
-#if ZEN_INTERNAL_PROFILING
             using (ProfileTimers.CreateTimedBlock("Type Analysis - Calling Baked Reflection Getter"))
-#endif
+            using (ZenProfileBlock.Start("Type Analysis - Calling Baked Reflection Getter"))
             {
                 var getInfoMethod = type.GetMethod(
                     ReflectionBakingGetInjectInfoMethodName,
@@ -198,7 +196,7 @@ namespace Zenject
                     var infoGetter = (ZenTypeInfoGetter)getInfoMethod.CreateDelegate(
                         typeof(ZenTypeInfoGetter), null);
 #else
-                    var infoGetter = ((ZenTypeInfoGetter)Delegate.CreateDelegate(
+                    var infoGetter = ((ZenTypeInfoGetter) Delegate.CreateDelegate(
                         typeof(ZenTypeInfoGetter), getInfoMethod));
 #endif
 
@@ -221,9 +219,8 @@ namespace Zenject
             }
 #endif
 
-#if ZEN_INTERNAL_PROFILING
             using (ProfileTimers.CreateTimedBlock("Type Analysis - Direct Reflection"))
-#endif
+            using (ZenProfileBlock.Start("Type Analysis - Direct Reflection"))
             {
                 return CreateTypeInfoFromReflection(type);
             }
@@ -232,8 +229,12 @@ namespace Zenject
         public static bool ShouldSkipTypeAnalysis(Type type)
         {
             return type == null || type.IsEnum() || type.IsArray || type.IsInterface()
-                || type.ContainsGenericParameters() || IsStaticType(type)
-                || type == typeof(object);
+                   || type.ContainsGenericParameters() || IsStaticType(type)
+                   || type == typeof(object)
+#if !NOT_UNITY3D
+                   || (type.Namespace != null && type.Namespace.Contains("UnityEngine"))
+#endif
+                ;
         }
 
         static bool IsStaticType(Type type)
@@ -254,8 +255,8 @@ namespace Zenject
 
             var memberInfos = reflectionInfo.InjectFields.Select(
                 x => ReflectionInfoTypeInfoConverter.ConvertField(type, x)).Concat(
-                    reflectionInfo.InjectProperties.Select(
-                        x => ReflectionInfoTypeInfoConverter.ConvertProperty(type, x))).ToArray();
+                reflectionInfo.InjectProperties.Select(
+                    x => ReflectionInfoTypeInfoConverter.ConvertProperty(type, x))).ToArray();
 
             return new InjectTypeInfo(
                 type, injectConstructor, injectMethods, memberInfos);

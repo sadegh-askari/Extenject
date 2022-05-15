@@ -5,10 +5,16 @@ using ModestTree;
 namespace Zenject.Internal
 {
     [NoReflectionBaking]
-    public class SingletonMarkRegistry
+    public class SingletonMarkRegistry : IDisposable
     {
-        readonly HashSet<Type> _boundSingletons = new HashSet<Type>();
-        readonly HashSet<Type> _boundNonSingletons = new HashSet<Type>();
+        HashSet<Type> _boundSingletons;
+        HashSet<Type> _boundNonSingletons;
+
+        public SingletonMarkRegistry()
+        {
+            _boundSingletons = ZenPools.SpawnHashSet<Type>();
+            _boundNonSingletons = ZenPools.SpawnHashSet<Type>();
+        }
 
         public void MarkNonSingleton(Type type)
         {
@@ -26,5 +32,12 @@ namespace Zenject.Internal
                 "Found multiple creation bindings for type '{0}' in addition to AsSingle.  The AsSingle binding must be the definitive creation binding.  If this is intentional, use AsCached instead of AsSingle.", type);
         }
 
+        public void Dispose()
+        {
+            ZenPools.DespawnHashSet(_boundSingletons);
+            ZenPools.DespawnHashSet(_boundNonSingletons);
+            _boundSingletons = null;
+            _boundNonSingletons = null;
+        }
     }
 }

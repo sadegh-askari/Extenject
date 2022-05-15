@@ -59,6 +59,8 @@ namespace Zenject
 
         public void FinalizeBinding(DiContainer container)
         {
+            using var profiler = ZenProfileBlock.StartForMethod();
+            
             AssertHasFinalizer();
             _bindingFinalizer.FinalizeBinding(container);
         }
@@ -77,6 +79,7 @@ namespace Zenject
 
         public void Dispose()
         {
+            Reset();
             ZenPools.DespawnStatement(this);
         }
     }

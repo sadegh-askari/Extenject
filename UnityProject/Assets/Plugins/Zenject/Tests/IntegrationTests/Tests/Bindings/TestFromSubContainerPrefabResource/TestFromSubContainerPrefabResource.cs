@@ -13,6 +13,7 @@ namespace Zenject.Tests.Bindings
 
         void CommonInstall()
         {
+            NeedZenjectBindingEnabled();
             Container.Settings = new ZenjectSettings(ValidationErrorResponses.Throw);
         }
 

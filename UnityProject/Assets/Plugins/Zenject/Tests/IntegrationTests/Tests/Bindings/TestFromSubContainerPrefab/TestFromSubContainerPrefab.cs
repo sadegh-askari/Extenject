@@ -1,6 +1,7 @@
 ﻿
 using System.Collections;
 using ModestTree;
+using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.TestTools;
 using Zenject.Tests.Bindings.FromSubContainerPrefab;
@@ -28,6 +29,7 @@ namespace Zenject.Tests.Bindings
 
         void CommonInstall()
         {
+            NeedZenjectBindingEnabled();
             Container.Settings = new ZenjectSettings(ValidationErrorResponses.Throw);
         }
 

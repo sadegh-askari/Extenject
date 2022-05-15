@@ -6,6 +6,8 @@ using System.Linq;
 using ModestTree;
 using UnityEngine;
 using UnityEngine.Serialization;
+using Zenject.Internal;
+
 #if UNITY_EDITOR
 using UnityEditor;
 
@@ -22,6 +24,9 @@ namespace Zenject
         List<MonoInstaller> _monoInstallers = new List<MonoInstaller>();
 
         [SerializeField] List<MonoInstaller> _installerPrefabs = new List<MonoInstaller>();
+
+        [Tooltip("If checked, this context will automatically get all MonoInstallers attached to the current gameObject by calling GetComponents. This is useful for when you are using Prefab Variants and you cannot easily modify the list of installers.")] [SerializeField]
+        bool _findSiblingMonoInstallers;
 
         List<InstallerBase> _normalInstallers = new List<InstallerBase>();
         List<Type> _normalInstallerTypes = new List<Type>();
@@ -81,7 +86,7 @@ namespace Zenject
         }
 
         public abstract DiContainer Container { get; }
-        public abstract IEnumerable<GameObject> GetRootGameObjects();
+        public abstract void GetRootGameObjects(List<GameObject> output);
 
         protected virtual void Awake()
         {
@@ -91,7 +96,12 @@ namespace Zenject
             EditorApplication.playModeStateChanged += OnEditorPlayModeChanged;
 #endif
         }
-        
+
+        protected virtual void OnDestroy()
+        {
+            Container.Dispose();
+        }
+
 #if UNITY_EDITOR
         void OnEditorPlayModeChanged(PlayModeStateChange obj)
         {
@@ -162,6 +172,26 @@ namespace Zenject
 
         protected void InstallInstallers()
         {
+            if (_findSiblingMonoInstallers)
+            {
+                List<MonoInstaller> siblingInstallers = ZenPools.SpawnList<MonoInstaller>();
+
+                try
+                {
+                    GetComponents(siblingInstallers);
+
+                    foreach (MonoInstaller m in siblingInstallers)
+                    {
+                        if (!_monoInstallers.Contains(m))
+                            _monoInstallers.Add(m);
+                    }
+                }
+                finally
+                {
+                    ZenPools.DespawnList(siblingInstallers);
+                }
+            }
+
             InstallInstallers(
                 _normalInstallers, _normalInstallerTypes, _scriptableObjectInstallers, _monoInstallers,
                 _installerPrefabs);
@@ -194,9 +224,12 @@ namespace Zenject
             // ScriptableObjectInstallers are often used for settings (including settings
             // that are injected into other installers like MonoInstallers)
 
-            var allInstallers = normalInstallers.Cast<IInstaller>()
-                .Concat(scriptableObjectInstallers.Cast<IInstaller>())
-                .Concat(installers.Cast<IInstaller>()).ToList();
+            using var disposeBlock = DisposeBlock.Spawn();
+            List<IInstaller> allInstallers = ZenPools.SpawnList<IInstaller>(disposeBlock);
+
+            allInstallers.AddRange(normalInstallers);
+            allInstallers.AddRange(scriptableObjectInstallers);
+            allInstallers.AddRange(installers);
 
             foreach (var installerPrefab in installerPrefabs)
             {
@@ -249,6 +282,9 @@ namespace Zenject
 
         protected void InstallSceneBindings(List<MonoBehaviour> injectableMonoBehaviours)
         {
+            if (!ProjectContext.Instance.Settings.UseZenjectBinding)
+                return;
+
             foreach (var binding in injectableMonoBehaviours.OfType<ZenjectBinding>())
             {
                 if (binding == null)

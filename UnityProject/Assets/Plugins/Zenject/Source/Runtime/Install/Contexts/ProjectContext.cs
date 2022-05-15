@@ -61,15 +61,17 @@ namespace Zenject
             }
         }
 
+        public ZenjectSettings Settings => _settings;
+
         public static bool ValidateOnNextRun
         {
             get;
             set;
         }
 
-        public override IEnumerable<GameObject> GetRootGameObjects()
+        public override void GetRootGameObjects(List<GameObject> output)
         {
-            return new[] { gameObject };
+            output.Add(gameObject);
         }
 
         public static GameObject TryGetPrefab()
@@ -97,9 +99,7 @@ namespace Zenject
 
         static void InstantiateAndInitialize()
         {
-#if UNITY_EDITOR
             ProfileBlock.UnityMainThread = Thread.CurrentThread;
-#endif
 
             Assert.That(FindObjectsOfType<ProjectContext>().IsEmpty(),
                 "Tried to create multiple instances of ProjectContext!");
@@ -244,7 +244,8 @@ namespace Zenject
                 PreInstall();
             }
 
-            var injectableMonoBehaviours = new List<MonoBehaviour>();
+            using var disposeBlock = DisposeBlock.Spawn();
+            var injectableMonoBehaviours = disposeBlock.SpawnList<MonoBehaviour>();
             GetInjectableMonoBehaviours(injectableMonoBehaviours);
 
             foreach (var instance in injectableMonoBehaviours)
